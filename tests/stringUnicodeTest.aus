@@ -1,0 +1,265 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// String tests for text beyond ASCII: UTF-16 indexing, U+0000, unpaired
+// surrogates, case mapping, comparison, regex and conversions. Every
+// expected value is what the Java implementation (aussom-base) gives,
+// and this file passes under both it and aussomc:
+//     ./build/aussomc -t tests/stringUnicodeTest.aus
+//     java -jar aussom.base-<version>-jar-with-dependencies.jar -t tests/stringUnicodeTest.aus
+//
+// Strings are compared as their UTF-16 code units, in decimal, so a
+// U+0000 (0), a surrogate (55296 and up) or a U+FFFD (65533) is easy to
+// see.
+
+include aunit;
+
+@Test(name = "String Unicode Tests")
+class stringUnicodeTests {
+    /***********************************************************************
+     * Helpers
+     *********************************************************************/
+
+    // The UTF-16 code units of a string, as "233,65". compare returns
+    // the difference of the first differing units, so a one-unit string
+    // compared with "\u0000" gives that unit's value.
+    public units(string Str) {
+        res = [];
+        for (i = 0; i < Str.length(); i++) {
+            res @= "" + Str.charAt(i).compare("\u0000");
+        }
+        return res.join(",");
+    }
+
+    // The units of each string in a list, as "97|98,99".
+    public unitsList(list Strs) {
+        res = [];
+        for (s : Strs) { res @= this.units(s); }
+        return res.join("|");
+    }
+
+    // The text of the exception a call raised.
+    public errText(callback Cb) {
+        try { Cb.call(); } catch (e) { return e.getText(); }
+        return "no exception";
+    }
+
+    /***********************************************************************
+     * Length and indexing count UTF-16 units
+     *********************************************************************/
+    @Test(name = "(unicode) length and # count UTF-16 units.")
+    public lengthUnits() {
+        test.expect("\u00e9a".length(), 2);
+        test.expect("\ud83d\ude00".length(), 2);
+        test.expect(#"x\u0000y", 3);
+        return test.expect(#"\ud800", 1);
+    }
+
+    @Test(name = "(unicode) charAt and substr index by unit.")
+    public indexUnits() {
+        test.expect("\u00e9a".charAt(1), "a");
+        test.expect("\ud83d\ude00b".substr(2), "b");
+        test.expect(this.units("x\u0000y".substr(1, 2)), "0");
+        return test.expect(this.units("\ud83d\ude00".charAt(0).toUpper()), "55357");
+    }
+
+    @Test(name = "(unicode) Two escapes that form a surrogate pair are one character.")
+    public escapedPair() {
+        test.expect("\ud83d\ude00" == "\ud83d" + "\ude00", true);
+        return test.expect("\ud83d\ude00".matches("."), true);
+    }
+
+    @Test(name = "(unicode) indexOf and lastIndexOf count units.")
+    public searchUnits() {
+        test.expect("\ud83d\ude00ab".indexOf("a"), 2);
+        test.expect("\ud83d\ude00ab".indexOf("\ude00"), 1);
+        test.expect("a\u0000b\u0000".lastIndexOf("\u0000"), 3);
+        return test.expect("x\u0000y".contains("\u0000"), true);
+    }
+
+    /***********************************************************************
+     * U+0000 is an ordinary character
+     *********************************************************************/
+    @Test(name = "(unicode) A string can hold U+0000 anywhere.")
+    public nulKept() {
+        s = "a\u0000b";
+        test.expect(this.units(s), "97,0,98");
+        test.expect(this.units(s + s), "97,0,98,97,0,98");
+        return test.expect(s == "a", false);
+    }
+
+    @Test(name = "(unicode) trim and isBlank treat U+0000 as blank.")
+    public nulTrim() {
+        test.expect(this.units("\u0000 a \u0000".trim()), "97");
+        return test.expect("\u0000\u0001".isBlank(), true);
+    }
+
+    @Test(name = "(unicode) toJson escapes U+0000.")
+    public nulJson() { return test.expect(["a\u0000"].toJson(), "[\"a\\u0000\"]"); }
+
+    @Test(name = "(unicode) json.parse keeps an escaped U+0000 and unpaired surrogate.")
+    public nulJsonParse() {
+        s = json.parse("[\"a\\u0000b\\ud800\"]")[0];
+        return test.expect(this.units(s), "97,0,98,55296");
+    }
+
+    @Test(name = "(unicode) base64.encode writes U+0000 as a zero byte and a lone surrogate as '?'.")
+    public base64Bytes() { return test.expect(base64.encode("x\u0000\ud800"), "eAA/"); }
+
+    @Test(name = "(unicode) base64.decode keeps a decoded U+0000.")
+    public base64Nul() { return test.expect(this.units(base64.decode("YQBi")), "97,0,98"); }
+
+    /***********************************************************************
+     * Case mapping
+     *********************************************************************/
+    @Test(name = "(unicode) toUpper maps non-ASCII letters, with expansions.")
+    public upper() {
+        test.expect(this.units("\u00e9".toUpper()), "201");
+        test.expect("stra\u00dfe".toUpper(), "STRASSE");
+        test.expect("\ufb03".toUpper(), "FFI");
+        return test.expect(this.units("\ud801\udc28".toUpper()), "55297,56320");
+    }
+
+    @Test(name = "(unicode) toLower maps non-ASCII letters, with special cases.")
+    public lower() {
+        test.expect(this.units("\u00c9".toLower()), "233");
+        return test.expect(this.units("\u0130".toLower()), "105,775");
+    }
+
+    @Test(name = "(unicode) toLower uses final sigma at the end of a word.")
+    public finalSigma() {
+        test.expect(this.units("\u039f\u0394\u03a5\u03a3\u03a3\u0395\u03a5\u03a3".toLower()),
+            "959,948,965,963,963,949,965,962");
+        test.expect(this.units("\u03a3".toLower()), "963");
+        return test.expect(this.units("\u0391\u03a3 \u0391".toLower()), "945,962,32,945");
+    }
+
+    @Test(name = "(unicode) Final sigma uses Java's word boundaries.")
+    public finalSigmaWords() {
+        // A digit and one apostrophe stay inside a word; two end it.
+        test.expect(this.units("\u03911\u03a3".toLower()), "945,49,962");
+        test.expect(this.units("\u0391'\u03a3".toLower()), "945,39,962");
+        test.expect(this.units("\u0391''\u03a3".toLower()), "945,39,39,963");
+        // A combining mark that starts the text stands apart.
+        test.expect(this.units("\u0345\u03a3".toLower()), "837,963");
+        test.expect(this.units("a\u0345\u03a3".toLower()), "97,837,962");
+        // After a supplementary letter in mid-text there is a boundary.
+        test.expect(this.units("\ud801\udc00\u03a3".toLower()), "55297,56360,962");
+        return test.expect(this.units("\u0391\ud801\udc00\u03a3".toLower()), "945,55297,56360,963");
+    }
+
+    @Test(name = "(unicode) Final sigma counts only Java's cased characters.")
+    public finalSigmaCased() {
+        // U+02B0 counts as cased; U+1D78 and U+00AA do not.
+        test.expect(this.units("\u02b0\u03a3".toLower()), "688,962");
+        test.expect(this.units("\u1d78\u03a3".toLower()), "7544,963");
+        return test.expect(this.units("\u00aa\u03a3".toLower()), "170,963");
+    }
+
+    /***********************************************************************
+     * Comparison
+     *********************************************************************/
+    @Test(name = "(unicode) compare and < order by UTF-16 unit.")
+    public compareUnits() {
+        test.expect("\ud83d\ude00".compare("\uffff"), 55357 - 65535);
+        test.expect("\ud83d\ude00" < "\uffff", true);
+        return test.expect("\u0000".compare("\u0001"), -1);
+    }
+
+    @Test(name = "(unicode) sort orders strings by UTF-16 unit, largest first.")
+    public sortUnits() {
+        l = ["b", "\ud83d\ude00", "\uffff", "\u0000", "a"];
+        l.sort();
+        return test.expect(this.unitsList(l), "65535|55357,56832|98|97|0");
+    }
+
+    @Test(name = "(unicode) compareICase and equalsICase fold case per character.")
+    public icase() {
+        test.expect("\u00c9".equalsICase("\u00e9"), true);
+        test.expect("\ud801\udc00".equalsICase("\ud801\udc28"), true);
+        test.expect("K".equalsICase("\u212a"), true);
+        test.expect("stra\u00dfe".equalsICase("STRASSE"), false);
+        test.expect("\u00df".compareICase("SS"), 108);
+        return test.expect("x\ud801\udc00".compareICase("x\uffff"), 1065);
+    }
+
+    /***********************************************************************
+     * replace, split and regex
+     *********************************************************************/
+    @Test(name = "(unicode) replace with an empty target splits surrogate pairs.")
+    public replaceEmpty() { return test.expect(this.units("\ud83d\ude00".replace("", "-")), "45,55357,45,56832,45"); }
+
+    @Test(name = "(unicode) An empty regex match steps one unit, inside a pair too.")
+    public regexEmpty() {
+        test.expect(this.units("\ud83d\ude00".replaceRegex("", "-")), "45,55357,45,56832,45");
+        return test.expect(this.unitsList("\ud83d\ude00b".split("")), "55357|56832|98");
+    }
+
+    @Test(name = "(unicode) '.' matches a surrogate pair as one character, and a lone surrogate.")
+    public regexDot() {
+        test.expect(this.unitsList(regex.match(".", "\ud83d\ude00a")), "55357,56832|97");
+        return test.expect(this.unitsList(regex.match(".", "\ud83da")), "55357|97");
+    }
+
+    @Test(name = "(unicode) '.' does not match Java's line terminators.")
+    public regexLineEnds() {
+        test.expect("\r".matches("."), false);
+        test.expect("\u0085".matches("."), false);
+        return test.expect("\u2028".matches("."), false);
+    }
+
+    @Test(name = "(unicode) (?i) and \\w are ASCII only.")
+    public regexAscii() {
+        test.expect("\u00e9".matches("(?i)\u00c9"), false);
+        test.expect("A".matches("(?i)a"), true);
+        return test.expect("\u00e9".matches("\\w"), false);
+    }
+
+    @Test(name = "(unicode) matches needs the whole string, trying every alternative.")
+    public matchesWhole() { return test.expect("ab".matches("a|ab"), true); }
+
+    @Test(name = "(unicode) split returns the input when the delimiter never matches.")
+    public splitNoMatch() {
+        test.expect(#"".split(",", true), 1);
+        return test.expect(#"abc".split(","), 1);
+    }
+
+    /***********************************************************************
+     * Numbers and format
+     *********************************************************************/
+    @Test(name = "(unicode) Int.parse accepts any Unicode decimal digit.")
+    public parseDigits() {
+        test.expect(Int.parse("\u0661\u0662"), 12);
+        test.expect(Int.parse("\uff11\uff12"), 12);
+        return test.expect(Int.parse("-\u0663"), -3);
+    }
+
+    @Test(name = "(unicode) Double.parse trims U+0000 and reads ASCII only.")
+    public parseDouble() {
+        test.expect(Double.parse("1.5\u0000"), 1.5);
+        txt = this.errText(::parseArabic);
+        return test.expect(txt.contains("Double parse exception"), true);
+    }
+    public parseArabic() { return Double.parse("\u0661.5"); }
+
+    @Test(name = "(unicode) format counts indexes in units and takes Unicode digits.")
+    public formatUnits() {
+        test.expect("\ud83d\ude00{\u0661}".format("a", "b"), "\ud83d\ude00b");
+        txt = this.errText(::formatBad);
+        return test.expect(txt.contains("Single '}' at index 2"), true);
+    }
+    public formatBad() { return "\ud83d\ude00}".format(); }
+}

@@ -1,0 +1,2653 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * The bool class implements bool datatype methods. These
+ * functions can be used on any bool value.
+ */
+extern class bool : com.aussom.types.AussomBool {
+    /**
+     * Converts the bool value to int.
+     * @r An int with 1 if true and 0 if false.
+     */
+	public extern toInt();
+
+	/**
+     * Converts the bool value to double.
+     * @r A double with 1.0 if true and 0.0 if false.
+     */
+	public extern toDouble();
+
+	/**
+     * Converts the boolean value to string.
+     * @r A string with 'true' or 'false'.
+     */
+	public extern toString();
+
+	/**
+     * Compares the value to the provided value.
+     * @r An int value with the value 0 if this == Val, a value less than
+     * 0 if !this && Val, and a value greater than 0 if this && !Val.
+     */
+	public extern compare(bool Val);
+
+	/**
+     * Parses the provided string value and sets the bool value.
+     * @p Val is a string with 'true' or 'false'.
+     * @r This object.
+     */
+	public extern parse(string Val);
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Static class Bool implements functions that operate on
+ * bool data types. For example you can use Bool.parse()
+ * to parse a string value.
+ */
+static extern class Bool : com.aussom.stdlib.SBool {
+    /**
+     * Parses the provided string and returns the bool value.
+     * @p Val is a string with the bool value.
+     * @r A bool value.
+     */
+	public extern parse(string Val);
+}
+
+/**
+ * The int class implements int datatype methods. These
+ * functions can be used on any int value.
+ */
+extern class int : com.aussom.types.AussomInt {
+    /**
+     * Converts the int to double.
+     * @r A double with the value.
+     */
+	public extern toDouble();
+
+	/**
+     * Converts the int to a bool.
+     * @r A bool with true if non-zero and false if zero.
+     */
+	public extern toBool();
+
+	/**
+     * Converts the int to it's string representation.
+     * @r A string with the value.
+     */
+	public extern toString();
+
+	/**
+     * Compares the value to the provided value.
+     * @r An int with the value 0 if this == Val. A value less than 0 if this < Val,
+     * and a value greater than 0 if this > Val.
+     */
+	public extern compare(int Val);
+
+	/**
+     * Returns the number of zero bits preceding the highest-order
+     * one-bit in the two's complement binary representation of the value.
+     * @r An integer with number of zeros.
+     */
+	public extern numLeadingZeros();
+
+	/**
+     * Returns the number of zero bits following the lowest-order
+     * one-bit in the two's complement binary representation of the value.
+     * @r An integer with the number of zeros.
+     */
+	public extern numTrailingZeros();
+
+	/**
+     * Returns the value by reversing the bits of the value.
+     * @r An int with the reversed bit order.
+     */
+	public extern reverse();
+
+	/**
+     * Returns the value by reversing the bytes of the value.
+     * @r An int with the reversed byte order.
+     */
+	public extern reverseBytes();
+
+	/**
+     * Rotates the value the number of bits provided to the left.
+     * @r An int with the rotated bits.
+     */
+	public extern rotateLeft(int Distance);
+
+	/**
+     * Rotates the value the number of bits provided to the right.
+     * @r An int with the rotated bits.
+     */
+	public extern rotateRight(int Distance);
+
+	/**
+     * Returns the signum function.
+     * @r An int with the signum function.
+     */
+	public extern signum();
+
+	/**
+     * Returns a string with this value as an
+     * unsigned integer in base 2.
+     * @r A string with the binary value.
+     */
+	public extern toBinary();
+
+	/**
+     * Returns a string with this value as an
+     * unsigned integer in base 16.
+     * @r A string with the base 16 value.
+     */
+	public extern toHex();
+
+	/**
+     * Returns a string with the value as an
+     * unsigned integer in base 8.
+     * @r A string with the base 8 value.
+     */
+	public extern toOctal();
+
+	/**
+     * Parses the provided string with the provided
+     * radix and sets the int value.
+     * @p Str is a string to parse.
+     * @p Radix is the optional radix value to use.
+     * @r This object.
+     */
+	public extern parse(string Str, int Radix = null);
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Static class Int implements functions the operate on
+ * int data types. For instance you can call
+ * Int.maxVal() to get the maximum integer value.
+ */
+static extern class Int : com.aussom.stdlib.SInt {
+    /**
+     * Returns the max int value available. This translates
+     * to Javas Long.MAX_VALUE.
+     */
+	public extern maxVal();
+
+	/**
+     * Returns the min int value available. This translates
+     * to Javas Long.IN_VALUE.
+     */
+	public extern minVal();
+
+	/**
+     * Parses the provided string with the provided
+     * radix.
+     * @p Str is a string to parse.
+     * @p Radix is the optional radix value to use.
+     * @r An int with the parsed value.
+     */
+	public extern parse(string Str, int Radix = null);
+}
+
+/**
+ * The int class implements int datatype methods. These
+ * functions can be used on any int value.
+ */
+extern class double : com.aussom.types.AussomDouble {
+    /**
+     * Casts the double value to int. This will truncate
+     * any fractional part of the double and converts internall
+     * to a Long int value.
+     * @r An int with the converted value.
+     */
+	public extern toInt();
+
+	/**
+	 * Converts the double value to a boolean value. If the double
+	 * value is 0.0, it's converted to false and otherwise it's
+	 * converted to true.
+	 * @r A bool with the converted value.
+	 */
+	public extern toBool();
+
+	/**
+	 * Converts the double value to a string.
+	 * @r A string with the converted value.
+	 */
+	public extern toString();
+
+	/**
+	 * Compares the provided double value to the current
+	 * value and returns an int with the result. The value
+	 * returned is 0 if the current value is numerically
+	 * equal to Val2. A value less than 0 is returned if
+	 * the current value is less than Val2, and a value
+	 * greater than 0 if the current value is greater than
+	 * Val2.
+	 * @p Val2 is a double with the value to compare.
+	 * @r An in with the comparison result.
+	 */
+	public extern compare(double Val2);
+
+	/**
+	 * Returns a bool with true if infinite and false
+	 * if not.
+	 * @r A bool with true for infinite and false for not.
+	 */
+	public extern isInfinite();
+
+	/**
+	 * Returns the is not a number flag.
+	 * @r A bool with true if NaN, or false if not.
+	 */
+	public extern isNan();
+
+	/**
+	 * Parses the provided string value and sets the double value.
+	 * @p Val is a string with the double value.
+	 * @r This object.
+	 */
+	public extern parse(string Val);
+
+	/**
+	 * Returns a hexadecimal string representation
+	 * of the double value.
+	 * @r A string with the hex value.
+	 */
+	public extern toHex();
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Static class Double implements functions the operate on
+ * double data types. For instance you can call
+ * Double.maxVal() to get the maximum double value.
+ */
+static extern class Double : com.aussom.stdlib.SDouble {
+    /**
+     * Gets the maximum exponent value. (Java Double.MAX_EXPONENT)
+     * @r An int with the max exponent size.
+     */
+	public extern maxExp();
+
+	/**
+     * Gets the double maximum value. (Java Double.MAX_VALUE)
+     * @r A double with the maximum value.
+     */
+	public extern maxVal();
+
+	/**
+     * Gets the minimum exponent value. (Java Double.MIN_EXPONENT)
+     * @r An int with the minimum exponent value.
+     */
+	public extern minExp();
+
+	/**
+     * Gets the double minimum normal value. (Java Double.MIN_NORMAL)
+     * @r A double with the minimum normal value.
+     */
+	public extern minNormal();
+
+	/**
+     * Gets the double minimum value. (Java Double.MIN_VALUE)
+     * @r A double with the minumum value.
+     */
+	public extern minVal();
+
+	/**
+     * Returns the not a number (NaN) constant value.
+     * @r A double with the NaN value.
+     */
+	public extern nanVal();
+
+	/**
+     * Gets the negative infinity value.
+     * @r A double with the negative indinity value.
+     */
+	public extern negInfinity();
+
+	/**
+     * Gets the positivie infinity value.
+     * @r A double with the positive indinity value.
+     */
+	public extern posInfinity();
+
+	/**
+     * Gets the number of bits used to represent
+     * a double value.
+     * @r An int with the number of bits.
+     */
+	public extern size();
+
+	/**
+	 * Parses the provided string value.
+	 * @r A double value that is the parsed value from the provided string.
+	 */
+	public extern parse(string Val);
+}
+
+/**
+ * Implements string datatype methods.
+ */
+extern class string : com.aussom.types.AussomString {
+    /**
+     * Gets the character at the provided index. It returns
+     * the character at the provided index as a new string and
+     * can throw an index out of bounds exception.
+     * @p Index is an int with the index to get the character at.
+     * @r A string with the character at that index.
+     */
+	public extern charAt(int Index);
+
+	/**
+     * This compare function returns an int with the comparison
+     * value. It returns a 0 if the strings are equal. It returns
+     * a negative value if the current value lexicographically precedes
+     * the provided Str value and is posititive if it lexicographically
+     * follows the provided Str value.
+     * @p Str is the string to compare to.
+     * @r An int with the return value.
+     */
+	public extern compare(string Str);
+
+	/**
+     * Compares the provided string to the current one ignoring case.
+     * The comparison is the same as string.compare() but just
+     * ignoring case.
+     * @p Str is the string to compare to.
+     * @r An int with the return value.
+     */
+	public extern compareICase(string Str);
+
+	/**
+     * Concatenates the provided string value to the
+     * current string value and storing it as the
+     * current string value. This function appends the
+     * provided string.
+     * @p Str is the string to concatenate.
+     * @r this string object
+     */
+	public extern concat(string Str);
+
+	/**
+     * Checks to see if the current string value contains
+     * the provided string value.
+     * @p Needle is a string with the value to check.
+     * @r A bool with true if it contains it and false if not.
+     */
+	public extern contains(string Needle);
+
+	/**
+     * Checks to see if the string ends with the
+     * provided string.
+     * @p Suffix is string to check.
+     * @r A bool with true if it ends with the
+     * provided string and false if not.
+     */
+	public extern endsWith(string Suffix);
+
+	/**
+     * Checks to see if the provided string equals
+     * the current string.
+     * @p Str is a string to check.
+     * @r A bool with true if it equal and false if not.
+     */
+	public extern equals(string Str);
+
+	/**
+     * Similar to string.equals() this compares the current
+     * string to the provided one but it ignores case.
+     * @p Str is a string to check.
+     * @r A bool with true if it equal and false if not.
+     */
+	public extern equalsICase(string Str);
+
+	/**
+     * Returns the index within this string of
+     * the first occurrence of the specified substring. If not
+     * found it returns -1.
+     * @p Needle is a string to look for.
+     * @r An int with the begining index or -1 if not found.
+     */
+	public extern indexOf(string Needle);
+
+	/**
+     * Similar to string.indexOf() this function returns the index
+     * within this string of the first occurrence of the specified
+     * found it returns -1. It starts checking in the provided
+     * start index.
+     * @p Needle is a string to look for.
+     * @p StartIndex is a string with the starting index
+     * to check from.
+     * @r An int with the begining index or -1 if not found.
+     */
+	public extern indexOfStart(string Needle, int StartIndex);
+
+	/**
+     * Checks to see if the string is empty. It only
+     * returns true if the string length is 0.
+     * @r A bool with true if empty and false if not.
+     */
+	public extern isEmpty();
+
+	/**
+     * Checks to see if the blank is empty after performing
+     * a string.trim(). So this will return true if the string
+     * has no characters, or is only white space.
+     * @r A bool with true if is blank and false if not.
+     */
+	public extern isBlank();
+
+	/**
+     * Finds the last index of the provided string
+     * and returns -1 if not found.
+     * @p Needle is the string to search for.
+     * @r The last index of the string being searched
+     * for or -1 if not found.
+     */
+	public extern lastIndexOf(string Needle);
+
+	/**
+     * Finds the last index of the provided string
+     * and returns -1 if not found. Note that the function
+     * starts search at the last index and searches forward
+     * so when you provide a start index it will search
+     * backward from that position in the curret string.
+     * @p Needle is the string to search for.
+     * @p StartIndex is an int with the begining index to
+     * start searching backwards from.
+     * @r The last index of the string being searched
+     * for or -1 if not found.
+     */
+	public extern lastIndexOfStart(string Needle, int StartIndex);
+
+	/**
+     * Gets the string length.
+     * @r An int with the string length.
+     */
+	public extern length();
+
+	/**
+     * Checks to see if the provided Java regex expression
+     * matches the current string. It returns true if it
+     * matches and false if not.
+     *
+     * A host may set a step budget for regular expressions
+     * through aussom.limit.regex.steps. A pattern that runs
+     * past it raises REGEX_BUDGET_EXCEEDED, which happens when
+     * it backtracks far more than the string justifies. The
+     * regex engine also has a built-in limit, so a runaway
+     * pattern is refused even when no budget is set.
+     * @p Regex is a string with a Java regular expression
+     * to match.
+     * @r A boolean with true if it matches and false if not.
+     */
+	public extern matches(string Regex);
+
+	/**
+     * Replaces the string to find with the provided
+     * replacement and returns the new string.
+     * @p Find is a string to find.
+     * @p Replace is a string to replace with.
+     * @r A new string with the replaced string.
+     */
+	public extern replace(string Find, string Replace);
+
+	/**
+     * Replace the first occurance of the search regular expression
+     * with the provided replacement string.
+     *
+     * A host may set a step budget for regular expressions
+     * through aussom.limit.regex.steps. A pattern that runs
+     * past it raises REGEX_BUDGET_EXCEEDED, which happens when
+     * it backtracks far more than the string justifies. The
+     * regex engine also has a built-in limit, so a runaway
+     * pattern is refused even when no budget is set.
+     * @p Regex is a string with the regular expression to look for.
+     * @p Replace is the string to replace with.
+     * @r A new string with the replaced value.
+     */
+	public extern replaceFirstRegex(string Regex, string Replace);
+
+	/**
+     * Replaces all instance the provied regular expression
+     * matches with the provided replacement string.
+     *
+     * A host may set a step budget for regular expressions
+     * through aussom.limit.regex.steps. A pattern that runs
+     * past it raises REGEX_BUDGET_EXCEEDED, which happens when
+     * it backtracks far more than the string justifies. The
+     * regex engine also has a built-in limit, so a runaway
+     * pattern is refused even when no budget is set.
+     * @p Regex is a string with the regex pattern.
+     * @p Replace is a string with the replacement string.
+     * @r A new string with the replaced parts.
+     */
+	public extern replaceRegex(string Regex, string Replace);
+
+	/**
+     * Splits the current string by the provided delimiter. If
+     * allow blanks is set to true, it will also return blank
+     * parts between delimiters, otherwise trimmed sections that
+     * are empty won't be included in the results.
+     *
+     * The delimiter is a regular expression, so the same
+     * budget applies as for matches(): a runaway pattern
+     * raises REGEX_BUDGET_EXCEEDED rather than running for
+     * minutes.
+     * @p Delim is a string with the delimier to split on.
+     * @p AllowBlanks is an optional bool with true to return blank
+     * sections and false for not. The default is false.
+     * @r A list with the split values.
+     */
+	public extern split(string Delim, bool AllowBlanks = false);
+
+	/**
+     * Checks if the current string starts with the provided string.
+     * @p Prefix is the string to check if it starts with.
+     * @r A bool with true if it starts with and false if not.
+     */
+	public extern startsWith(string Prefix);
+
+	/**
+     * Substring returns a sub string of the current string
+     * value with the provided index and optional end index.
+     * @p Index is the start index to get the substring from.
+     * @p EndIndex is the optional end index to get the
+     * substring from. Default is null.
+     * @r A string with the sub string value.
+     */
+	public extern substr(int Index, int EndIndex = null);
+
+	/**
+     * Converts the string to lower case.
+     * @r A string with the current string value but all lower case.
+     */
+	public extern toLower();
+
+	/**
+     * Converts the string to upper case.
+     * @r A string with the current string value but all upper case.
+     */
+	public extern toUpper();
+
+	/**
+     * Removes all of the leading and trainig blank characters
+     * from the current string. The blank characters are defined
+     * as any character whose codepoint is less than or equal
+     * to 'U+0020' (the space character).
+     * @r A string with the leading and training whitespace removed.
+     */
+	public extern trim();
+
+	/**
+     * Builds a new string from this string as a template, replacing
+     * placeholders with the provided arguments. This is the
+     * general-purpose alternative to building strings with '+'.
+     *
+     * Placeholders are written with curly braces:
+     *   {}     the next positional argument, in order.
+     *   {N}    the positional argument at index N (0 based). An index
+     *          may be reused, e.g. "{0} {0}".
+     *   {name} the value at key 'name' in the first map argument.
+     * Write '{{' or '}}' to include a literal brace. Scalar arguments
+     * are converted to their plain string form (a string is inserted
+     * unquoted). Lists and maps are rendered as compact JSON, e.g.
+     * [1,2,3] or {"a":1}, rather than the multi-line debug form.
+     *
+     * Examples:
+     *   "Hello {}, you are {}.".format("Bob", 42)
+     *   "{0}-{1}-{0}".format("a", "b")
+     *   "{greeting}, {name}!".format({ "greeting": "Hi", "name": "Bob" })
+     *
+     * @p etc are the arguments referenced by the placeholders.
+     * @r A new formatted string.
+     */
+	public format(...) { return this._format(etc); }
+	public extern _format(list Args);
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Parses this string as an int. Convenience method that delegates
+     * to Int.parse. Throws on parse failure with the same contract as
+     * Int.parse - wrap the call in try/catch when the input may be
+     * invalid.
+     * @p Radix is an optional int with the numeric base to parse in
+     * (e.g. 16 for hex). When omitted, base 10 is used.
+     * @r An int with the parsed value.
+     */
+	public parseInt(int Radix = null) { return Int.parse(this, Radix); }
+
+	/**
+     * Parses this string as a double. Convenience method that
+     * delegates to Double.parse. Throws on parse failure - wrap the
+     * call in try/catch when the input may be invalid.
+     * @r A double with the parsed value.
+     */
+	public parseDouble() { return Double.parse(this); }
+
+	/**
+     * Parses this string as a bool. Convenience method that delegates
+     * to Bool.parse. Throws on parse failure - wrap the call in
+     * try/catch when the input may be invalid.
+     * @r A bool with the parsed value.
+     */
+	public parseBool() { return Bool.parse(this); }
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Implements list datatype methods.
+ */
+extern class list : com.aussom.types.AussomList {
+    /**
+     * Adds the provided item to the list.
+     * @p ItemToAdd is any item to add.
+     * @r this object
+     */
+	public extern add(ItemToAdd);
+
+	/**
+     * Adds all the items in the provided list to the
+     * current list.
+     * @p ListToAdd is a list with the items to add.
+     * @r this object
+     */
+	public extern addAll(list ListToAdd);
+
+	/**
+     * Adds all items in the provided list to the current
+     * list at the provided index.
+     * @p ListToAdd is a list of items to add.
+     * @p Index is an int with the index to start adding items at.
+     * @r this object
+     */
+	public extern addAllAt(list ListToAdd, int Index);
+
+	/**
+     * Removes all items from the list.
+     * @r this object
+     */
+	public extern clear();
+
+	/**
+     * Clones the current list and returns a shallow
+     * copy of the current list.
+     * @r A new list with the cloned values.
+     */
+	public extern clone();
+
+	/**
+     * Checks to see if the provided item exists in the current
+     * list. Primitive values (null, bool, int, double, and string)
+     * and callbacks are matched by value. Objects, lists, and maps
+     * are matched by reference.
+     * @p Item is the item to check for.
+     * @r A bool with true if found and false if not.
+     */
+	public extern contains(Item);
+
+	/**
+     * Checks to see if the current list contains the provided
+     * item by reference. Unlike contains(), this always matches
+     * by reference (identity), even for primitive values.
+     * @p Item is any item to check for the reference in the list.
+     * @r A bool with true if found and false if not.
+     */
+	public extern containsObjRef(Item);
+
+	/**
+     * Gets the item at the provided index.
+     * @p Index is an int with the index to get the item at.
+     * @r The item found at the provided index.
+     */
+	public extern get(int Index);
+
+	/**
+     * Returns the index of the provided item in the list
+     * and -1 if not found. Primitive values (null, bool, int,
+     * double, and string) and callbacks are matched by value.
+     * Objects, lists, and maps are matched by reference.
+     * @p Item is the item to find in the list.
+     * @r An int with the index of the item or -1 if not found.
+     */
+	public extern indexOf(Item);
+
+	/**
+     * Checks to see if the list is empty.
+     * @r A bool with true if empty and false if not.
+     */
+	public extern isEmpty();
+
+	/**
+     * Removes the provided item from the list. Primitive values
+     * (null, bool, int, double, and string) and callbacks are
+     * matched by value. Objects, lists, and maps are matched by
+     * reference. Only the first matching item is removed.
+     * @p Item is the item to remove from the list.
+     * @r this object
+     */
+	public extern remove(Item);
+
+	/**
+     * Remove the item at the provided index.
+     * @p Index is an int with the index to remove the item at.
+     * @r The item that was removed from the list.
+     */
+	public extern removeAt(int Index);
+
+	/**
+     * Removes all items from the current list that are found in
+     * the provided list. Primitive values (null, bool, int,
+     * double, and string) and callbacks are matched by value.
+     * Objects, lists, and maps are matched by reference.
+     * @p ListToRemove is the list of items to remove from the
+     * current list.
+     * @r A bool with true if the list has changed and false if not.
+     */
+	public extern removeAll(list ListToRemove);
+
+	/**
+     * Retains only those items provided in the list. Primitive
+     * values (null, bool, int, double, and string) and callbacks
+     * are matched by value. Objects, lists, and maps are matched
+     * by reference.
+     * @p ListToRetain is a list of items to retain in the
+     * current list.
+     * @r A bool with true if the list has changed and false if not.
+     */
+	public extern retainAll(list ListToRetain);
+
+	/**
+     * Sets the provided item at the provided index.
+     * @p Index is an int with the index to set the item at.
+     * @p Item is the item to set.
+     * @r The previous item that was at the location.
+     */
+	public extern set(int Index, Item);
+
+	/**
+     * Gets the size of the list.
+     * @r An int with the size of the list.
+     */
+	public extern size();
+
+	/**
+     * Produces a sub list with the provided start
+     * and end indexes from the current list.
+     * @p StartIndex is an int with the starting index.
+     * @p EndIndex is an int with the ending index.
+     * @r A new list with the items between start and end indexes.
+     */
+	public extern subList(int StartIndex, int EndIndex);
+
+	/**
+     * Sorts the list descending. This function should work
+     * for any type and uses the compare function to sort the
+     * items.
+     * @r A sorted list.
+     */
+	public extern sort();
+
+	/**
+     * Sorts the list ascending. This function should work
+     * for any type and uses the compare function to sort the
+     * items.
+     * @r A sorted list.
+     */
+	public extern sortAsc();
+
+	/**
+     * Reverses the order of the items in the current list
+     * in place.
+     * @r this list.
+     */
+	public extern reverse();
+
+	/**
+     * Joins the items in the current list with the
+     * provided string.
+     * @p Glue is a string to use to join the items together.
+     * @r A string with the joined parts.
+     */
+	public extern join(string Glue);
+
+	/**
+     * Sorts the list with the provided custom
+     * compare callback. The function definition must
+     * take the two items that are being compared and return
+     * an int with either a negative value, 0, or a positive
+     * value that's used to sort the list.
+     * @p OnCompare is a callback that does the
+     * comparison for sorting.
+     */
+	public extern sortCustom(callback OnCompare);
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Implements map datatype methods.
+ */
+extern class map : com.aussom.types.AussomMap {
+    /**
+     * Clears the current map contents.
+     * @r this object
+     */
+	public extern clear();
+
+	/**
+     * Checks to see if the current map contains the
+     * provided key.
+     * @p Key is a strig to check for.
+     * @r A bool with true if found and false if not.
+     */
+	public extern containsKey(string Key);
+
+	/**
+     * Checks to see if the map contains the provided value.
+     * Primitive values (null, bool, int, double, and string) and
+     * callbacks are matched by value. Objects, lists, and maps are
+     * matched by reference.
+     * @p Val is the value to check for.
+     * @r A bool with true if found and false if not.
+     */
+	public extern containsVal(Val);
+
+	/**
+     * Gets the value with the provided key.
+     * @p Key is a string with the key for the value to get.
+     * @r A value or null if not found.
+     */
+	public extern get(string Key);
+
+	/**
+     * Gets the value with the provided key and returns it.
+     * If not found it returns the provided default value.
+     * @p Key is a string with the key for the value to get.
+     * @p defVal is the default value to return if the
+     * key isn't found.
+     * @r The value of for the provided key or the default
+     * value if not found.
+     */
+	public extern getd(string Key, defVal);
+
+	/**
+     * Checks to see if the current map is empty.
+     * @r A bool with true if empty or false if not.
+     */
+	public extern isEmpty();
+
+	/**
+     * Gets a list of the available keys.
+     * @r A list of strings with the keys.
+     */
+	public extern keySet();
+
+	/**
+     * Puts the provided value with the provided key.
+     * @p Key is a string with the key to set.
+     * @p Val is the value to set.
+     * @r this object
+     */
+	public extern put(string Key, Val);
+
+	/**
+     * Puts all the items from the provided map
+     * into the current map.
+     * @p ToAdd is a map with the keys and values to add.
+     * @r this object
+     */
+	public extern putAll(map ToAdd);
+
+	/**
+     * Puts the key and value pair if they key
+     * doesn't already exist.
+     * @p Key is the key to set.
+     * @p Val is the value to set.
+     * @r this object
+     */
+	public extern putIfAbsent(string Key, Val);
+
+	/**
+     * Removes the key value pair with the provided key.
+     * @p Key is a string with the key to remove.
+     * @r The value of the item that was removed or
+     * null if not found.
+     */
+	public extern remove(string Key);
+
+	/**
+     * Gets the size of the map.
+     * @r An int with the map size.
+     */
+	public extern size();
+
+	/**
+     * Gets a list of the values in the map.
+     * @r A list with the map values.
+     */
+	public extern values();
+
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Implements object datatype methods.
+ */
+extern class object : com.aussom.types.AussomObject {
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+	 * Sets a mock on the object for the specified function
+	 * name. When the function is invoked the provided
+	 * return value is returned instead of calling the
+	 * original function.
+	 * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+	 */
+	public extern mock(string FunctionName, ReturnVal);
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Implements callback datatype methods. The callback is
+ * a function reference that can be passed around. This is
+ * useful when needing to pass a function to call later.
+ *
+ * Two callbacks are considered equal when they reference
+ * the same function name and are bound to the same object.
+ * List and map lookups that match callbacks by value, such
+ * as contains(), indexOf(), remove(), and containsVal(), use
+ * this rule.
+ */
+extern class callback : com.aussom.types.AussomCallback {
+    /**
+     * The call method invokes the current callback with
+     * the provided list of arguments.
+     * @p etc are the arguments to pass to the function.
+     * @r Any object that the called function returns.
+     */
+	public call(...) { return this._call(etc); }
+	public extern _call(list args);
+
+	/**
+     * Sets a mock on the object for the specified function
+     * name. When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @r this object
+     */
+    public extern mock(string FunctionName, ReturnVal);
+
+    /**
+     * Sets a mock on the object for the specified function
+     * name with the provided callback to provide the condition.
+     * When the function is invoked the provided
+     * return value is returned instead of calling the
+     * original function. This only occurs when the condition
+     * provided in Condition is executed and a 1 or true is returned.
+     * @p FunctionName is a string with the function to mock.
+     * @p ReturnVal is the return value to return.
+     * @p Condition is a callback with the condition code.
+     * @r this object
+     */
+    public extern mockWhen(string FunctionName, callback Condition, ReturnVal);
+
+    /**
+     * Sets the spy flag on the object. This will record the arguements provided
+     * and the return value of each function call for the provided function name.
+     * @p FunctionName is a string with the function to spy.
+     * @r this object
+     */
+    public extern setSpy(string FunctionName);
+
+    /**
+     * Retuns a list of maps with each map contining the following:
+     * - timestamp: The seconds since epoch that the function was called.
+     * - arguments: A list of the arguments provided to the function.
+     * - returnValue: The value returned from the function.
+     * @p FunctionName is a string with the spy records to get.
+     * @r A list of spy records.
+     */
+    public extern getSpy(string FunctionName);
+}
+
+/**
+ * Implements null datatype methods.
+ */
+extern class cnull : com.aussom.types.AussomNull {
+	/**
+     * Converts the value to a JSON encoded string.
+     * @r A JSON encoded string.
+     */
+	public extern toJson();
+
+	/**
+     * Serializes the data into a structure.
+     * @r A packed string.
+     */
+	public extern pack();
+
+	/**
+	 * This function is implemented in case a variable that is
+	 * expected to have a string is actually set to null. In this
+	 * case this function will return true.
+	 * @r A boolean with true.
+	 */
+	public extern isBlank();
+}
+
+	    
+/**
+ * The exception class is the object that is created or
+ * thrown when an exception occurs. In your catch (e) {}
+ * block this is the object that is provided there.
+ */
+extern class exception : com.aussom.types.AussomException {
+	/**
+	 * Gets the line number of the exception.
+	 * @r An int with the line number.
+	 */
+	public extern getLineNumber();
+
+	/**
+	 * Gets the type of exception. Options are exUndef,
+	 * exInternal, or exRuntime.
+	 * @r A string with the exception type.
+	 */
+	public extern getExceptionType();
+
+	/**
+	 * Gets the exception ID string.
+	 * @r A string with the exception ID.
+	 */
+	public extern getId();
+
+	/**
+	 * Gets the exception text.
+	 * @r A string with the exception text.
+	 */
+	public extern getText();
+
+	/**
+	 * Gets the exception details. The details is often
+	 * the same as the exception text but can provide additional
+	 * information in some cases.
+	 * @r A string with the exception details.
+	 */
+	public extern getDetails();
+
+	/**
+	 * Gets the Aussom stack trace as a string.
+	 * @r A string with the stack trace.
+	 */
+	public extern getStackTrace();
+
+	/**
+	 * Creates the Aussom stack trace and prints it to
+	 * standard output.
+	 * @r this object
+	 */
+	public printStackTrace() { c.println(this.getStackTrace()); return this; }
+
+	/**
+	 * Converts the entire exception including line number, type,
+	 * ID, details, and stack trace and returns it as a string
+	 * with newline characters.
+	 * @r A string with the exception information.
+	 */
+	public toString() {
+		estr = "line " + this.getLineNumber() + ": " + this.getExceptionType() + " Exception. [" + this.getId() + "] :: " + this.getDetails();
+		estr += "\n" + this.getStackTrace();
+		return estr;
+	}
+}
+
+	    
+/**
+ * The static 'c' class also known as console is
+ * the standard object for writing to standard output.
+ * Console provides standard log, print, and println
+ * functions as well as logging ones such as trc,
+ * dbg, info, warn, and err. For log, print, and println
+ * then write to standard out at the info logging level.
+ */
+static extern class c : com.aussom.stdlib.console {
+	/**
+	 * Logs the provided content at the trace level.
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern trc(Content);
+
+	/**
+	 * Logs the provided content at the debug level.
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern dbg(Content);
+
+	/**
+	 * Logs the provided content at the info level, but
+	 * probably without the [info] prefix. This is essentially
+	 * the same as println() or info().
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern log(Content);
+
+	/**
+	 * Logs the provided content at the info level.
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern info(Content);
+
+	/**
+	 * Logs the provided content at the warning level.
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern warn(Content);
+
+	/**
+	 * Logs the provided content at the error level.
+	 * @p Content is any content to log.
+	 * @r this object.
+	 */
+	public extern err(Content);
+
+	/**
+	 * Writes the provided content to standard output
+	 * but without a newline character.
+	 * @p Content is any content write.
+	 * @r this object.
+	 */
+	public extern print(Content);
+
+	/**
+	 * Writes the provided content to standard output
+	 * with a trailing newline character.
+	 * @p Content is any content to write.
+	 * @r this object.
+	 */
+	public extern println(Content);
+}
+
+
+/**
+ * Defines the unit values accepted by Date.between(). Each member
+ * evaluates to its matching unit string, so between() can be called
+ * as myDate.between(other, dateunit.days) instead of passing the raw
+ * string "days". This is less error prone than typing the string.
+ */
+enum dateunit {
+	millis;
+	seconds;
+	minutes;
+	hours;
+	days;
+	weeks;
+	months;
+	years;
+}
+
+
+/**
+ * The Date class holds date and time information. Internally
+ * it stores a java.time.Instant. Hour, minute, and second
+ * accessors are evaluated at UTC.
+ */
+extern class Date : com.aussom.stdlib.ADate {
+	/**
+	 * Default constructor takes an optional argument of
+	 * milliseconds since epoch and returns the new Date.
+	 * @p Mills is an optional int with the milliseconds since epoch.
+	 * @r A new Date object.
+	 */
+	public Date(int Mills = null) {
+		return this.newDate(Mills);
+	}
+	public extern newDate(int Mills = null);
+
+	/**
+	 * Gets the hour of the day evaluated at UTC, represented by
+	 * a value between 0-23.
+	 * @r An int with the hour of the day.
+	 */
+	public extern getHours();
+
+	/**
+	 * Returns the number of minutes past the hour evaluated at
+	 * UTC, represented by an integer value between 0-59.
+	 * @r An int with the minutes.
+	 */
+	public extern getMinutes();
+
+	/**
+	 * Gets the number of seconds past the minute evaluated at
+	 * UTC, represented by an integer value between 0-59.
+	 * @r An int with the seconds.
+	 */
+	public extern getSeconds();
+
+	/**
+	 * Gets the number of milliseconds since
+	 * epoch (January 1, 1970, 00:00:00 GMT) represented
+	 * by this Date object.
+	 * @r An int with the number of milliseconds since epoch.
+	 */
+	public extern getTime();
+	
+	/**
+	 * Sets the hour of this object to the provided value,
+	 * interpreted at UTC. The underlying Instant is adjusted to
+	 * match.
+	 * @p Hours is an int with the hours to set. (0-23)
+	 */
+	public extern setHours(int Hours);
+
+	/**
+	 * Sets the minutes of this object to the provided value,
+	 * interpreted at UTC. The underlying Instant is adjusted to
+	 * match.
+	 * @p Minutes is an int with the minutes to set. (0-59)
+	 */
+	public extern setMinutes(int Minutes);
+
+	/**
+	 * Sets the seconds of this object to the provided value,
+	 * interpreted at UTC. The underlying Instant is adjusted to
+	 * match.
+	 * @p Seconds is an int with the seconds to set. (0-59)
+	 */
+	public extern setSeconds(int Seconds);
+
+	/**
+	 * Sets the time of the object with the provided number of
+	 * milliseconds since epoch (January 1, 1970, 00:00:00 GMT).
+	 * @p TimeMills is the number of milliseconds since epoch.
+	 */
+	public extern setTime(int TimeMills);
+
+	/**
+	 * Returns an ISO 8601 representation of this Date in UTC,
+	 * formatted as yyyy-MM-dd'T'HH:mm:ss.SSSXXX. Example:
+	 * 2024-02-15T08:30:00.123+00:00.
+	 * @r A string with the formatted date value.
+	 */
+	public extern toString();
+
+	/**
+	 * Parses the provided date string with the provided format.
+	 * The pattern syntax is Java DateTimeFormatter syntax, which
+	 * is mostly compatible with the older SimpleDateFormat syntax
+	 * but stricter on out-of-range values (e.g. 2024-02-30 will
+	 * throw rather than rolling over to March 1) and on year
+	 * widths (use uuuu instead of yyyy for years outside 1..9999).
+	 * Strings that omit a zone are interpreted at UTC.
+	 * For the full pattern reference see
+	 * https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html
+	 * This function may throw a date parse exception.
+	 * @p DateString is the string with the date value to parse.
+	 * @p DateFormat is a string with the format to use.
+	 * @r this object
+	 */
+	public extern parse(string DateString, string DateFormat);
+
+	/**
+	 * Converts the current date to string using the provided
+	 * optional format. The pattern syntax is Java
+	 * DateTimeFormatter syntax. The output is rendered at UTC.
+	 * For the full pattern reference see
+	 * https://docs.oracle.com/javase/8/docs/api/java/time/format/DateTimeFormatter.html
+	 * @p DateFormat is a string with the format to use.
+	 * @r A string with the formatted date result.
+	 */
+	public extern format(string DateFormat = "yyyy-MM-dd HH:mm:ss.SSS Z");
+
+	/**
+	 * Checks to see if the current date is the epoch date of
+	 * (January 1, 1970, 00:00:00 GMT) represented by 0 milliseconds.
+	 * @r A bool with true if it's epoch and false if not.
+	 */
+	public extern isEpoch();
+
+	/**
+	 * Returns the year, for example 2024, evaluated at UTC.
+	 * @r An int with the year.
+	 */
+	public extern getYear();
+
+	/**
+	 * Returns the month of the year evaluated at UTC, 1-12 where
+	 * January is 1.
+	 * @r An int with the month, 1-12.
+	 */
+	public extern getMonth();
+
+	/**
+	 * Returns the day of the month evaluated at UTC, 1-31.
+	 * @r An int with the day of month.
+	 */
+	public extern getDayOfMonth();
+
+	/**
+	 * Returns the day of the week evaluated at UTC using ISO numbering,
+	 * 1-7 where Monday is 1 and Sunday is 7.
+	 * @r An int with the ISO day of week, 1-7.
+	 */
+	public extern getDayOfWeek();
+
+	/**
+	 * Returns the day of the year evaluated at UTC, 1-366.
+	 * @r An int with the day of year.
+	 */
+	public extern getDayOfYear();
+
+	/**
+	 * Returns the ISO week number of the year evaluated at UTC, 1-53.
+	 * @r An int with the ISO week of year.
+	 */
+	public extern getWeekOfYear();
+
+	/**
+	 * Returns the millisecond within the current second evaluated at
+	 * UTC, 0-999.
+	 * @r An int with the millisecond of second.
+	 */
+	public extern getMilliseconds();
+
+	/**
+	 * Sets the year, interpreted at UTC. Changes this Date in place. To
+	 * keep the original untouched, call copy() first.
+	 * @p Year is an int with the year to set.
+	 * @r this object
+	 */
+	public extern setYear(int Year);
+
+	/**
+	 * Sets the month, interpreted at UTC. Changes this Date in place.
+	 * @p Month is an int with the month to set, 1-12.
+	 * @r this object
+	 */
+	public extern setMonth(int Month);
+
+	/**
+	 * Sets the day of the month, interpreted at UTC. Changes this Date
+	 * in place.
+	 * @p Day is an int with the day of month to set, 1-31.
+	 * @r this object
+	 */
+	public extern setDayOfMonth(int Day);
+
+	/**
+	 * Adds the provided number of years to this Date, interpreted at
+	 * UTC. A negative value subtracts. Changes this Date in place; call
+	 * copy() first to keep the original.
+	 * @p Years is an int with the number of years to add.
+	 * @r this object
+	 */
+	public extern addYears(int Years);
+
+	/**
+	 * Adds the provided number of months to this Date, interpreted at
+	 * UTC. A negative value subtracts. Changes this Date in place.
+	 * @p Months is an int with the number of months to add.
+	 * @r this object
+	 */
+	public extern addMonths(int Months);
+
+	/**
+	 * Adds the provided number of days to this Date. A negative value
+	 * subtracts. Changes this Date in place.
+	 * @p Days is an int with the number of days to add.
+	 * @r this object
+	 */
+	public extern addDays(int Days);
+
+	/**
+	 * Adds the provided number of hours to this Date. A negative value
+	 * subtracts. Changes this Date in place.
+	 * @p Hours is an int with the number of hours to add.
+	 * @r this object
+	 */
+	public extern addHours(int Hours);
+
+	/**
+	 * Adds the provided number of minutes to this Date. A negative value
+	 * subtracts. Changes this Date in place.
+	 * @p Minutes is an int with the number of minutes to add.
+	 * @r this object
+	 */
+	public extern addMinutes(int Minutes);
+
+	/**
+	 * Adds the provided number of seconds to this Date. A negative value
+	 * subtracts. Changes this Date in place.
+	 * @p Seconds is an int with the number of seconds to add.
+	 * @r this object
+	 */
+	public extern addSeconds(int Seconds);
+
+	/**
+	 * Adds the provided number of milliseconds to this Date. A negative
+	 * value subtracts. Changes this Date in place.
+	 * @p Millis is an int with the number of milliseconds to add.
+	 * @r this object
+	 */
+	public extern addMillis(int Millis);
+
+	/**
+	 * Returns whether this Date is earlier than the other Date.
+	 * @p Other is another Date object to compare against.
+	 * @r A bool, true when this Date is before Other.
+	 */
+	public extern isBefore(Other);
+
+	/**
+	 * Returns whether this Date is later than the other Date.
+	 * @p Other is another Date object to compare against.
+	 * @r A bool, true when this Date is after Other.
+	 */
+	public extern isAfter(Other);
+
+	/**
+	 * Returns whether this Date marks the same instant as the other
+	 * Date, compared to the millisecond.
+	 * @p Other is another Date object to compare against.
+	 * @r A bool, true when both mark the same instant.
+	 */
+	public extern isSame(Other);
+
+	/**
+	 * Compares this Date to another Date. Named compare (not compareTo) so
+	 * the Date type does not accidentally satisfy java.lang.Comparable when
+	 * an embedder asks the engine for that interface.
+	 * @p Other is another Date object to compare against.
+	 * @r An int: -1 when this is before Other, 0 when equal, 1 when after.
+	 */
+	public extern compare(Other);
+
+	/**
+	 * Returns the amount of time from this Date to the other Date, in the
+	 * provided unit. The result is positive when Other is later than this
+	 * Date and negative when Other is earlier.
+	 * @p Other is another Date object.
+	 * @p Unit is an optional string with the unit: millis, seconds,
+	 * minutes, hours, days, weeks, months, or years. Defaults to millis.
+	 * The dateunit enum provides these values, for example dateunit.days,
+	 * which is less error prone than typing the raw string.
+	 * @r An int with the signed amount of time in the given unit.
+	 */
+	public extern between(Other, string Unit = "millis");
+
+	/**
+	 * Sets this Date to the current instant. Changes this Date in place.
+	 * For example: new Date().now().
+	 * @r this object
+	 */
+	public extern now();
+
+	/**
+	 * Returns a new Date with the same instant as this one. Use this
+	 * before a mutating call to keep the original unchanged, for
+	 * example: end = start.copy().addDays(30).
+	 * @r A new Date object.
+	 */
+	public extern copy();
+
+	/**
+	 * Sets the time of day to 00:00:00.000 UTC, keeping the date.
+	 * Changes this Date in place.
+	 * @r this object
+	 */
+	public extern startOfDay();
+
+	/**
+	 * Sets the time of day to 23:59:59.999 UTC, keeping the date.
+	 * Changes this Date in place.
+	 * @r this object
+	 */
+	public extern endOfDay();
+
+	/**
+	 * Returns the full English month name in upper case, for example
+	 * "MARCH", evaluated at UTC.
+	 * @r A string with the month name.
+	 */
+	public extern getMonthName();
+
+	/**
+	 * Returns the full English weekday name in upper case, for example
+	 * "FRIDAY", evaluated at UTC.
+	 * @r A string with the weekday name.
+	 */
+	public extern getDayOfWeekName();
+
+	/**
+	 * Returns whether this Date's year is a leap year, evaluated at UTC.
+	 * @r A bool, true when the year is a leap year.
+	 */
+	public extern isLeapYear();
+
+	/**
+	 * Returns the number of days in this Date's month, 28-31, evaluated
+	 * at UTC.
+	 * @r An int with the number of days in the month.
+	 */
+	public extern daysInMonth();
+}
+
+	    
+/**
+ * Defines available character set values.
+ */
+enum charset {
+	us_ascii;
+	iso_8859_1;
+	utf_8;
+	utf_16be;
+	utf_16le;
+	utf_16;
+}
+
+	    
+/**
+ * Defines the byte order types.
+ */
+enum byteOrder {
+	big;
+	little;
+}
+
+	    
+/**
+ * The Buffer object provides an object for handling binary
+ * data. Aussom doesn't natively support something like a
+ * byte array, so this object is used to provide that
+ * functionality.
+ */
+extern class Buffer : com.aussom.stdlib.ABuffer {
+    /**
+     * Creates a new Buffer object with the optional
+     * provided number of bytes.
+     *
+     * The size is checked before anything is allocated. A
+     * negative size, or one too large for the runtime to
+     * address, raises an exception rather than quietly
+     * producing a Buffer of some other size.
+     *
+     * @p Size is an int with the number of bytes to
+     * allocate in the Buffer.
+     * @r A new Buffer object.
+     */
+	public Buffer(int Size = 1024) {
+		return this.newBuffer(Size);
+	}
+	public extern newBuffer(int Size = 1024);
+
+	/**
+	 * Gets the size of the Buffer in bytes.
+	 * @r An int with the number of bytes.
+	 */
+	public extern size();
+
+	/**
+	 * Clears the Buffer setting all bytes to 0
+	 * and resets the read and write cursors.
+	 * @r this object
+	 */
+	public extern clear();
+
+	/**
+	 * Moves the write cursor to the specified index.
+	 * @p Index is an int with the value to set.
+	 * @r this object
+	 */
+	public extern writeSeek(int Index);
+
+	/**
+	 * Moves the read cursor to the specified index.
+	 * @p Index is an int with the value to set.
+	 * @r this object
+	 */
+	public extern readSeek(int Index);
+
+	/**
+	 * Adds the provided string to the Buffer at the
+	 * current write index with the provided optional
+	 * character set. This also moves the write cursor
+	 * to the end of the string that was added.
+	 * @p Str is the string to add.
+	 * @p Charset is an optional string with the
+	 * character set to use.
+	 * @r this object
+	 */
+	public extern addString(string Str, string Charset = "utf_8");
+
+	/**
+	 * Adds the provided byte to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant byte will be added.
+	 * @p Byte is an int with a value between -127 and 127.
+	 * @r this object
+	 */
+	public extern addByte(int Byte);
+
+	/**
+	 * Adds the provided byte to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but the least significant byte will be added.
+	 * @p Byte is an int with a value between 0 and 255.
+	 * @r this object
+	 */
+	public extern addUByte(int Byte);
+
+	/**
+	 * Adds the provided short to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant two bytes will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided int value.
+	 * @p Short is an int to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addShort(int Short, string ByteOrder = "big");
+
+	/**
+	 * Adds the provided unsigned short to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant two bytes will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided int value.
+	 * @p Short is an int to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addUShort(int Short, string ByteOrder = "big");
+
+	/**
+	 * Adds the provided int (4 bytes) to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant four bytes will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided int value.
+	 * @p Int is an int to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addInt(int Int, string ByteOrder = "big");
+
+	/**
+	 * Adds the provided unsigned int (4 bytes) to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant four bytes will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided int value.
+	 * @p Int is an int to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addUInt(int Int, string ByteOrder = "big");
+
+	/**
+	 * Adds the provided long (8 bytes) to the Buffer at the
+	 * current write index. Note that an int (long in Java)
+	 * is provided so all eight bytes will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided int value.
+	 * @p Long is an int to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addLong(int Long, string ByteOrder = "big");
+
+	/**
+	 * Adds a float (4 bytes) to the current Buffer. Note that a
+	 * Aussom double (8 bytes) is provided so only the first 4 bytes
+	 * will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided double value.
+	 * @p Float is a double to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addFloat(double Float, string ByteOrder = "big");
+
+	/**
+	 * Adds a double (8 bytes) to the current Buffer. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided double value.
+	 * @p Double is a double to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern addDouble(double Double, string ByteOrder = "big");
+
+	/**
+	 * Gets the current position of the write cursor.
+	 * @r An int with the write cursor.
+	 */
+	public extern getWriteCursor();
+
+	/**
+	 * Gets the current position of the read cursor.
+	 * @r An int with the read cursor.
+	 */
+	public extern getReadCursor();
+
+	/**
+	 * Gets a string from the current read cursor to the end
+	 * of the Buffer with the optional character set.
+	 * @p Charset is a string with the charcter set to use.
+	 * @r A string with the content.
+	 */
+	public extern getString(string Charset = "utf_8");
+
+	/**
+	 * Gets a string with the supplied length at the provided
+	 * optional index with the optional provided character set. If
+	 * not specified the index will be the read cursor position.
+	 *
+	 * The index and length are checked against the size of the
+	 * Buffer before anything is allocated, so reading past the
+	 * end raises an exception that says so rather than
+	 * allocating first and failing later.
+	 *
+	 * @p Length is an int with the number of bytes to get.
+	 * @p Index is an int with the start index.
+	 * @p Charset is a string with the character set to use.
+	 * @r A string with the content.
+	 */
+	public extern getStringAt(int Length, int Index = -1, string Charset = "utf_8");
+
+	/**
+	 * Gets a byte at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the byte from.
+	 * @r An int with the byte value.
+	 */
+	public extern getByte(int Index = -1);
+
+	/**
+	 * Gets an unsigned byte at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the unsigned byte from.
+	 * @r An int with the byte value.
+	 */
+	public extern getUByte(int Index = -1);
+
+	/**
+	 * Gets a short (2 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the short from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r An int with the short value.
+	 */
+	public extern getShort(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets an unsigned short (2 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the unsigned short from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r An int with the short value.
+	 */
+	public extern getUShort(int Inex = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets an int (4 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the int from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r An int with the int value.
+	 */
+	public extern getInt(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets an unsigned int (4 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the unsigned int from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r An int with the int value.
+	 */
+	public extern getUInt(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets a long (8 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the long from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r An int with the long value.
+	 */
+	public extern getLong(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets a float (4 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the float from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r A double with the float value.
+	 */
+	public extern getFloat(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Gets a double (8 bytes) at the specified index or if not
+	 * specified at the current read cursor.
+	 * @p Index is an optional int with the index to
+	 * read the double from.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r A double with the double value.
+	 */
+	public extern getDouble(int Index = -1, string ByteOrder = "big");
+
+	/**
+	 * Sets the Buffer to the current provided string. The Buffer
+	 * will be resized from what it was to the size of the string
+	 * and will return the number of bytes as an int.
+	 * @p Str is the string to set.
+	 * @p Charset is an optional string with the
+	 * character set to use.
+	 * @r An int with the size of the new Buffer.
+	 */
+	public extern setString(string Str, string Charset = "utf_8");
+
+	/**
+	 * Sets the provided string at the provided index with the
+	 * optional character set and returns the number of bytes
+	 * as an int.
+	 * @p Index is an int with the index to set the string at.
+	 * @p Str is the string to set.
+	 * @p Charset is an optional string with the
+	 * character set to use.
+	 * @r An int with the number of bytes set.
+	 */
+	public extern setStringAt(int Index, string Str, string Charset = "utf_8");
+	
+	/**
+	 * Sets the provided byte in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int to the
+	 * least significant byte will be added.
+	 * @p Index in an int with the index to set the byte at.
+	 * @p Byte is an int with a value between -127 and 127.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setByte(int Index, int Byte, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided unsigned byte in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to a byte to the
+	 * least significant byte will be added.
+	 * @p Index in an int with the index to set the byte at.
+	 * @p Byte is an int with a value between 0 and 256.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setUByte(int Index, int Byte, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided short (2 bytes) in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to a short and the
+	 * least significant bytes will be added.
+	 * @p Index in an int with the index to set the short at.
+	 * @p Short is an int with a value to set.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setShort(int Index, int Short, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided unsigned short (2 bytes) in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to an unsigned short and the
+	 * least significant bytes will be added.
+	 * @p Index in an int with the index to set the short at.
+	 * @p Short is an int with a value to set.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setUShort(int Index, int Short, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided int (4 bytes) in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to an int and the
+	 * least significant bytes will be added.
+	 * @p Index in an int with the index to set the int at.
+	 * @p Int is an int with a value to set.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setInt(int Index, int Int, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided unsigned int (4 bytes) in the Buffer at the
+	 * provided index. Note that an int (long in Java)
+	 * is provided but that will be cast to an unsigned int and the
+	 * least significant bytes will be added.
+	 * @p Index in an int with the index to set the int at.
+	 * @p Int is an int with a value to set.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setUInt(int Index, int Int, string ByteOrder = "big");
+
+	/**
+	 * Sets the provided long (8 bytes) in the Buffer at the
+	 * provided index.
+	 * @p Index in an int with the index to set the long at.
+	 * @p Long is an int with a value to set.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setLong(int Index, int Long, string ByteOrder = "big");
+
+	/**
+	 * Adds a float (4 bytes) to the current Buffer. Note that a
+	 * Aussom double (8 bytes) is provided so only the first 4 bytes
+	 * will be added. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided double value.
+	 * @p Index in an int with the index to set the float at.
+	 * @p Float is a double to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setFloat(int Index, double Float, string ByteOrder = "big");
+
+	/**
+	 * Adds a double (8 bytes) to the current Buffer. You can also
+	 * supply the byte order which defaults to big endian. The
+	 * byte order affects the order in which they bytes are added
+	 * to the Buffer and not to how the bytes are taken from the
+	 * provided double value.
+	 * @p Index in an int with the index to set the double at.
+	 * @p Double is a double to add.
+	 * @p ByteOrder is an optional string with the byte order (big or little).
+	 * @r this object
+	 */
+	public extern setDouble(int Index, double Double, string ByteOrder = "big");
+
+	/**
+	 * Coppies the bytes from a source Buffer to this Buffer. You must specify
+	 * the index in the current (destination) Buffer and the Buffer object to
+	 * copy from. You may optionally set the index in the source Buffer, otherwise
+	 * it will just copy from the beginning. You may optionally set the length to
+	 * copy.
+	 * @p DestIndex is an int with the index in the current (destination) Buffer to
+	 * start copying to.
+	 * @p Buffer is a Buffer object to copy bytes from.
+	 * @p SrcIndex is an optional index to start copying bytes from in the source Buffer.
+	 * @p Length is an optional int with the number of bytes to copy.
+	 * @r this object
+	 */
+	public extern copyFrom(int DestIndex, object Buffer, int SrcIndex = -1, int Length = -1);
+
+	/**
+	 * Coppies the bytes from this Buffer to the provided Buffer. You must specify
+	 * the index in the current (source) Buffer and the Buffer object to
+	 * copy to. You may optionally set the index in the dest Buffer, otherwise
+	 * it will just copy from the beginning. You may optionally set the length to
+	 * copy.
+	 * @p SrcIndex is an int with the index in the current (source) Buffer to
+	 * start copying from.
+	 * @p Buffer is a Buffer object to copy the bytes to.
+	 * @p DestIndex is an optional int with the destination Buffer to start copying to.
+	 * @p Length is an optional int with the number of bytes to copy.
+	 */
+	public extern copyTo(int SrcIndex, object Buffer, int DestIndex = -1, int Length = -1);
+	
+	// Binary display functions
+	/**
+	 * Gets the binary string representation of the byte at
+	 * the provided index.
+	 * @p Index is an int with the index of the byte to get.
+	 * @r A binary string with the representation of the byte.
+	 */
+	public extern byteToBinary(int Index);
+
+	/**
+	 * Gets the binary string representation of the short at
+	 * the provided index.
+	 * @p Index is an int with the index of the short to get.
+	 * @r A binary string with the representation of the short.
+	 */
+	public extern shortToBinary(int Index, string ByteOrder = "big");
+
+	/**
+	 * Gets the binary string representation of the int at
+	 * the provided index.
+	 * @p Index is an int with the index of the int to get.
+	 * @r A binary string with the representation of the int.
+	 */
+	public extern intToBinary(int Index, string ByteOrder = "big");
+
+	/**
+	 * Gets the binary string representation of the long at
+	 * the provided index.
+	 * @p Index is an int with the index of the long to get.
+	 * @r A binary string with the representation of the long.
+	 */
+	public extern longToBinary(int Index, string ByteOrder = "big");
+
+	/**
+	 * Gets the binary string representation of the float at
+	 * the provided index.
+	 * @p Index is an int with the index of the float to get.
+	 * @r A binary string with the representation of the float.
+	 */
+	public extern floatToBinary(int Index, string ByteOrder = "big");
+
+	/**
+	 * Gets the binary string representation of the double at
+	 * the provided index.
+	 * @p Index is an int with the index of the double to get.
+	 * @r A binary string with the representation of the double.
+	 */
+	public extern doubleToBinary(int Index, string ByteOrder = "big");
+}
+
+	    
+/**
+ * The staic lang object provides some standard
+ * functionality for the Aussom language.
+ */
+static extern class lang : com.aussom.stdlib.ALang {
+    /**
+     * Gets the type of the data provided. If a simple type is
+     * provided such as bool, int, double, string, null, or list,
+     * then a string with that name is returned. If an object is
+     * provided it's class name is returned as the type.
+     * @p DataType is a string with the type to check.
+     * @r A string with the type.
+     */
+	public extern type(DataType);
+
+	/**
+	 * Gets the Aussom doc structure of the object of the
+	 * class name provided. The class must be already read (included)
+	 * in the current runtime engine. It then produces a doc structure
+	 * and returns it. This function requires the Aussom
+	 * SecurityManager permission aussomdoc.class.getJson.
+	 * @p ClassName is a string with the name of the class to
+	 * get the Aussom doc for.
+	 * @r A structur of maps, lists, and fields that has the
+	 * Aussom doc.
+	 */
+	public extern getClassAussomdoc(string ClassName);
+}
+
+	    
+/**
+ * The static json class implements some functions for
+ * working with JSON data.
+ */
+static extern class json : com.aussom.stdlib.AJson {
+    /**
+     * Parses the provided JSON string and returns
+     * it as a list or map with the values.
+     * @p JsonString is a string with the JSON
+     * content to parse.
+     * @r A list or map of items that are the parsed JSON.
+     */
+	public extern parse(string JsonString);
+
+	/**
+	 * The unpack function unmarshalls objects that are
+	 * defined in the provided JSON string. This is the
+	 * reverse process of object.pack(). The structure that
+	 * is used to pack an object is specific to this unpack
+	 * function and includes things such as members and type
+	 * information. It's a way of deserializing data that
+	 * as been serialized with object.pack().
+	 * @p JsonString is a string with the packed data.
+	 * @r The unpacked data.
+	 */
+	public extern unpack(string JsonString);
+
+    /**
+     * Utility function which takes a JSON encoded string
+     * and escapes it.
+     * @p JsonString is the JSON string to escape.
+     * @r A new string with the escaped JSON.
+     */
+	public extern escape(string JsonString);
+}
+
+	    
+/**
+ * The static secman class implements function for working with
+ * the security manager of the currently executing engine.
+ */
+static extern class secman : com.aussom.stdlib.ASecMan {
+    /**
+     * Gets the security manager property value with
+     * the provided property name. This function requires
+     * Security Manager permission securitymanager.property.get.
+     * @p PropName is a string with the property name to get.
+     * @r A simple type with the value of the property.
+     */
+	public extern getProp(string PropName);
+
+	/**
+     * Gets the key set of the properties as a list
+     * of strings. This function requires Security
+     * Manager permission securitymanager.property.list.
+     * @r A list of strings of the property keys.
+     */
+	public extern keySet();
+
+	/**
+     * Gets a map of the security manager properties
+     * and their values. This function requires Security
+     * Manager permission securitymanager.property.list.
+     * @r A map with the security manager key values.
+     */
+	public extern getMap();
+
+	/**
+     * This method provides the ability to set the
+     * property of a security manager property pair.
+     * This function requires Security Manager
+     * permission securitymanager.property.set.
+     * @p PropName is a string with the property key to set.
+     * @p Value is a simple type value to set.
+     * @r this object
+     */
+	public extern setProp(string PropName, Value);
+
+	/**
+     * This method provides the ability
+	 * to set a whole map of key-val pairs.
+	 * This function requires Security Manager
+     * permission securitymanager.property.set.
+     * @p PropsToSet is a map with the key value
+     * pairs to set.
+     * @r this object
+     */
+	public extern setMap(map PropsToSet);
+}
+
+	    
+/**
+ * The SecurityManager class provides an object that you can
+ * instantiate and provide to the Aussom engine to use.
+ *
+ * What you get from new SecurityManager() is a policy value,
+ * not the policy of the engine you are running in. Writing to
+ * it does not change what the running program may do; the
+ * static secman class is the one that reads the engine's own
+ * policy.
+ */
+extern class SecurityManager : com.aussom.stdlib.ASecurityManager {
+    /**
+     * Creates a new security manager object. This function
+     * requires Security Manager permission
+     * securitymanager.instantiate.
+     * @r A new SecurityManager object.
+     */
+	public SecurityManager() {
+		return this.newSecurityManager();
+	}
+	public extern newSecurityManager();
+
+    /**
+     * Gets the security manager property value with
+     * the provided property name. This function requires
+     * Security Manager permission securitymanager.property.get.
+     * @p PropName is a string with the property name to get.
+     * @r A simple type with the value of the property.
+     */
+	public extern getProp(string PropName);
+
+	/**
+     * Gets the key set of the properties as a list
+     * of strings. This function requires Security
+     * Manager permission securitymanager.property.list.
+     * @r A list of strings of the property keys.
+     */
+	public extern keySet();
+
+	/**
+     * Gets a map of the security manager properties
+     * and their values. This function requires Security
+     * Manager permission securitymanager.property.list.
+     * @r A map with the security manager key values.
+     */
+	public extern getMap();
+
+	/**
+     * This method provides the ability to set the
+     * property of a security manager property pair.
+     * This function requires Security Manager
+     * permission securitymanager.property.set.
+     * @p PropName is a string with the property key to set.
+     * @p Value is a simple type value to set.
+     * @r this object
+     */
+	public extern setProp(string PropName, Value);
+
+	/**
+     * This method provides the ability
+	 * to set a whole map of key-val pairs.
+	 * This function requires Security Manager
+     * permission securitymanager.property.set.
+     * @p PropsToSet is a map with the key value
+     * pairs to set.
+     * @r this object
+     */
+	public extern setMap(map PropsToSet);
+}

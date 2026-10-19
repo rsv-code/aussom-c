@@ -1,0 +1,94 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Needed for unit testing support.
+include aunit;
+
+@Test(name = "Interpreter Tests")
+class interpreterTests {
+    /***********************************************************************
+     * Before and After
+     *********************************************************************/
+    @Before
+    public toRunBefore() {
+        c.info("Ran unit test @Before function 'toRunBefore()'.");
+    }
+
+    @After
+    public toRunAfter() {
+        c.info("Ran unit test @After function 'toRunAfter()'.");
+    }
+
+    /***********************************************************************
+     * Local variable assignments.
+     *********************************************************************/
+    @Test(name = "(local assignment) Assign variable null.")
+    public assignLocalNull() { var = null; return test.expectNull(var); }
+
+    @Test(name = "(local assignment) Assign variable bool.")
+    public assignLocalBool() { var = true; return test.expect(var, true); }
+
+    @Test(name = "(local assignment) Assign variable int.")
+    public assignLocalInt() { var = 1; return test.expect(var, 1); }
+
+    @Test(name = "(local assignment) Assign variable double.")
+    public assignLocalDouble() { var = 12345.6789; return test.expect(var, 12345.6789); }
+
+    @Test(name = "(local assignment) Assign variable string.")
+    public assignLocalString() { var = "hello world"; return test.expect(var, "hello world"); }
+
+    @Test(name = "(local assignment) Assign variable list.")
+    public assignLocalList() { var = []; return test.expectList(var); }
+
+    @Test(name = "(local assignment) Assign variable map.")
+    public assignLocalMap() { var = {}; return test.expectMap(var); }
+}
+
+class testRunnerTest {
+    public main() {
+        // Standard run the test class file.
+        // c.info("Attempting to run the testRunner for class interpreterTests.");
+        // res = test.runTestsForClass("interpreterTests");
+        // c.info(res);
+
+        // testRunner object - for interactive mode.
+        runner = new testRunner();
+
+        // Load this test file
+        runner.loadTestFile("tests/testRunnerTest.aus");
+
+        // Get the available test classes.
+        c.info(runner.getTestClasses());
+
+        // Get the available test functions.
+        c.info(runner.getTestFunctions("interpreterTests"));
+
+        // Run @Before function
+        runner.runBefore("interpreterTests");
+
+        // Run tests now
+        try {
+            testResult = runner.runTest("interpreterTests", "assignLocalMap");
+            c.info("assignLocalMap: success");
+        } catch (e) {
+            c.info("assignLocalMap: failed");
+            c.err(e);
+        }
+
+        // Run @After function
+        runner.runAfter("interpreterTests");
+    }
+}

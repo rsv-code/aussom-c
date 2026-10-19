@@ -1,0 +1,1429 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * aussom-c's own interpreter tests.
+ *
+ * tests/interpreter.aus is a copy of aussom-base's tests/interpreter.aus
+ * and must stay identical to it; aussom-base is the reference. Tests that
+ * only aussom-c has live here instead. Run with:
+ *
+ *     ./build/aussomc -t tests/c-interpreter.aus
+ */
+
+include aunit;
+include math;
+include sys;
+include util;
+include inctest;
+include reflect;
+include concurrent;
+
+
+// Classes for the stack trace frame tests.
+class traceHelper {
+	public traceHelper() { }
+	public h1() { return this.h2(); }
+	public h2() { throw "deep"; }
+}
+
+
+class traceCtor {
+	public traceCtor() { throw "inctor"; }
+}
+
+
+class traceOp {
+	public traceOp() { }
+	public __opAdd__(Other) { throw "inop"; }
+}
+
+
+// Classes for the reflection (getMethods / getMembers) tests.
+class reflBase {
+	public baseMember = 1;
+	public baseOnly(int a) { return a; }
+	public over(string s) { return s; }
+}
+
+
+// Never instantiated: reflection lists only its own definitions.
+class reflCold : reflBase {
+	public coldMember = 2;
+	public coldOnly() { }
+}
+
+
+class reflWarm : reflBase {
+	@Note(k = "v")
+	public warmMember = [1, 2];
+	public reflWarm() { }
+
+	@Tag(name = "t1")
+	@Other
+	public f(int a, string b = "x", c = 1.5, int d = null, ...) { }
+	public over(string s) { return s; }
+	public over(int i, double d) { return i; }
+}
+
+
+// Classes for the typed null default tests.
+class nullDefTyped {
+	public f(int x = null) { return "f:" + x; }
+	public g(int x = null) { return "g1"; }
+	public g(string s) { return "g2"; }
+}
+
+
+// Classes for the inherited method resolution test. Java merges a
+// parent's own parents into a class before the parent's entries.
+class resGp { public f() { return "gp"; } }
+
+class resMid : resGp { public f() { return "mid"; } }
+
+class resKid : resMid { }
+
+
+// Classes for the object init (:=) tests.
+class initBase {
+	private hidden = 1;
+	public setHidden(v) { this.hidden = v + 100; }
+	public getHidden() { return this.hidden; }
+}
+
+
+class initTarget : initBase {
+	private own = 3;
+	public pub = 0;
+	public initTarget() { }
+	public getOwn() { return this.own; }
+	public initSelf() { this := { "own": 9 }; }
+}
+
+
+/** A member that refers to the object itself, for the stack overflow tests. */
+class stackSelfRef {
+	public me = null;
+	public stackSelfRef() { this.me = this; }
+}
+
+
+class cbIdentity {
+	public f() { }
+	public cb() { return ::f; }
+}
+
+
+/** A one-test class for the test.runTestsForClass test. */
+@Test(name = "runTestsForClass sample")
+class rtfcSample {
+	public rtfcSample() { }
+
+	@Test(name = "(aunit) runTestsForClass sample test.")
+	public ok() { return true; }
+}
+
+
+/** Overloads that a call cannot choose between, for the ambiguity
+ * message tests. */
+class ovAmbig {
+	public p(int A, double B) { return 1; }
+	public p(double A, int B) { return 2; }
+	public w(int A, B) { return 1; }
+	public w(A, int B) { return 2; }
+	public v(A, int B, ...) { return 1; }
+	public v(int A, B, ...) { return 2; }
+}
+
+
+/** A class with two extern parents, which cannot be built. */
+class twoExternParents : Date, SecurityManager {
+	public twoExternParents() { }
+}
+
+/** A script's own SecurityManager binding that skips the C
+ * constructor. Its subclass carries the parent object as its extern
+ * state, not a security manager. */
+extern class secmanBind : com.aussom.stdlib.ASecurityManager {
+	public secmanBind() { }
+	public extern getProp(string Name);
+}
+class secmanBindSub : secmanBind { }
+
+/** A script's own Date binding that skips newDate. */
+extern class dateBind : com.aussom.stdlib.ADate {
+	public dateBind() { }
+	public extern getTime();
+	public extern setTime(int TimeMills);
+}
+
+/** A script's own testRunner binding and its subclass. */
+extern class runnerBind : com.aussom.stdlib.ATestRunner {
+	public runnerBind() { }
+	public extern getTestClasses();
+	public extern loadTestString(string Name, string Code);
+}
+class runnerBindSub : runnerBind { }
+
+/** A script's own testRunner binding whose tag setter takes any
+ * value. */
+extern class tagsBind : com.aussom.stdlib.ATestRunner {
+	public tagsBind() { }
+	public extern setIncludeTags(Tags);
+	public extern setExcludeTags(Tags);
+}
+
+class cInterpreterTests {
+	private f9buff = null;
+
+	 // INT64_MIN by -1 traps (SIGFPE) in C; Java wraps the quotient and
+	 // returns 0 for the remainder.
+	 @Test(name = "(int math) min int ~/ -1 wraps to min int.")
+	 public floorDivMinByNegOne() {
+		 a = -9223372036854775807 - 1;
+		 b = -1;
+		 return test.expect(a ~/ b, a);
+	 }
+
+	 @Test(name = "(int math) min int % -1 is 0.")
+	 public modMinByNegOne() {
+		 a = -9223372036854775807 - 1;
+		 return test.expect(a % -1, 0);
+	 }
+
+	 @Test(name = "(int math) ~/ and % by -1 on ordinary ints.")
+	 public divModByNegOne() {
+		 return test.expect((7 ~/ -1 == -7) && (-7 ~/ -1 == 7) && (7 % -1 == 0), true);
+	 }
+
+	 // Signed overflow is undefined in C; Java wraps.
+	 @Test(name = "(int math) max int + 1 wraps to min int.")
+	 public intAddWraps() {
+		 a = 9223372036854775807;
+		 return test.expect(a + 1, -9223372036854775807 - 1);
+	 }
+
+	 @Test(name = "(int math) max int ++ wraps to min int.")
+	 public intIncWraps() {
+		 a = 9223372036854775807;
+		 a++;
+		 return test.expect(a, -9223372036854775807 - 1);
+	 }
+
+	 @Test(name = "(int math) min int - 1 wraps to max int.")
+	 public intSubWraps() {
+		 a = -9223372036854775807 - 1;
+		 return test.expect(a - 1, 9223372036854775807);
+	 }
+
+	 @Test(name = "(int math) max int * 2 wraps to -2.")
+	 public intMulWraps() {
+		 a = 9223372036854775807;
+		 return test.expect(a * 2, -2);
+	 }
+
+	 @Test(name = "(int math) math.abs of min int is min int.")
+	 public intAbsMin() {
+		 a = -9223372036854775807 - 1;
+		 return test.expect(math.abs(a), a);
+	 }
+
+	 // A C cast of an out-of-range double is undefined; Java clamps
+	 // and maps NaN to 0.
+	 @Test(name = "(double) toInt of a huge double is max int.")
+	 public doubleToIntHuge() { return test.expect((1.0e300).toInt(), 9223372036854775807); }
+
+	 @Test(name = "(double) toInt of a huge negative double is min int.")
+	 public doubleToIntHugeNeg() { return test.expect((-1.0e300).toInt(), -9223372036854775807 - 1); }
+
+	 @Test(name = "(double) toInt of NaN is 0.")
+	 public doubleToIntNaN() { return test.expect(math.sqrt(-1.0).toInt(), 0); }
+
+	 // 1e300 is read as a Double, and AJson refuses anything but a Long
+	 // for an int.
+	 @Test(name = "(json) unpack of an int written as a double is refused.")
+	 public unpackIntHuge() {
+		 try { json.unpack("{\"type\":\"int\",\"value\":1e300}"); } catch (e) { return test.expect(e.getText().contains("found 'java.lang.Double'"), true); }
+		 return test.expect("no exception", "exception");
+	 }
+
+	 @Test(name = "(json) unpack refuses a fractional int.")
+	 public unpackIntFraction() {
+		 try { json.unpack("{\"type\":\"int\",\"value\":1.5}"); } catch (e) { return true; }
+		 return test.expect("no exception", "exception");
+	 }
+
+	 @Test(name = "(json) min and max int survive pack and unpack.")
+	 public packIntExtremes() {
+		 a = 9223372036854775807;
+		 b = -9223372036854775807 - 1;
+		 return test.expect((json.unpack(a.pack()) == a) && (json.unpack(b.pack()) == b), true);
+	 }
+
+	 // A callback names its object with an identity number, as Java's
+	 // identityHashCode does, never with address bits.
+	 @Test(name = "(callback) String form names the object by a stable identity.")
+	 public callbackStrIdentity() {
+		 a = new cbIdentity();
+		 b = new cbIdentity();
+		 sa = "" + a.cb();
+		 return test.expect(sa.startsWith("callback cbIdentity@") && sa.endsWith("::f")
+			 && sa == "" + a.cb() && sa != "" + b.cb(), true);
+	 }
+
+	 // Java re-reads the list size each pass and walks a map's live key
+	 // set, so changes made by the body are seen.
+	 @Test(name = "(foreach) Clearing a list in the body ends the loop.")
+	 public foreachListClear() {
+		 l = [1, 2, 3];
+		 n = 0;
+		 for (v : l) { l.clear(); n++; }
+		 return test.expect(n, 1);
+	 }
+
+	 @Test(name = "(foreach) Clearing a map in the body ends the loop.")
+	 public foreachMapClear() {
+		 m = {"a": 1, "b": 2, "c": 3};
+		 keys = "";
+		 for (k : m) { m.clear(); keys += k + ";"; }
+		 return test.expect(keys, "a;");
+	 }
+
+	 @Test(name = "(foreach) A map key removed by the body is not visited.")
+	 public foreachMapRemove() {
+		 m = {"a": 1, "b": 2, "c": 3};
+		 keys = "";
+		 for (k : m) { m.remove("b"); keys += k + ";"; }
+		 return test.expect(keys, "a;c;");
+	 }
+
+	@Test(name = "(lang string) String split drops trailing blank sections.")
+	public stringSplitTrailing() { return test.expect(#("a,b,,".split(",", true)), 2); }
+
+	// There is deliberately no test here for the regex step budget.
+	// Tripping it means doing the work the budget allows, and with no
+	// budget configured that is the regex engine's built-in limit of
+	// ten million steps, which costs about 200 ms -- more than the
+	// whole rest of this suite. A script cannot lower the budget under
+	// default policy (securitymanager.property.set is false), so there
+	// is no cheap way to reach the path from here. The budget mapping
+	// is exercised by hand with a low limit instead.
+
+	// String.substring throws, so the script sees Java's
+	// EXTERN_INVOCATION_TARGET_EXCEPTION, whose text names the method
+	// and ends with the thrown exception.
+	@Test(name = "(lang string) An out of range substr reports what went wrong.")
+	public substrOutOfRangeReports() {
+		return test.expectThrowsMessage(::substrOutOfRange, "invocation target exception for method 'substr'");
+	}
+
+	/** Callback for substrOutOfRangeReports. */
+	public substrOutOfRange() { x = "abc".substr(0-5); }
+
+	// Passing the list itself used to wait forever on its own lock.
+	@Test(name = "(lang list) removeAll with the list itself empties it.")
+	public listRemoveAllSelf() { lst = [ "one", "two" ]; lst.removeAll(lst); return test.expect(#lst, 0); }
+
+	@Test(name = "(lang list) retainAll with the list itself keeps every item.")
+	public listRetainAllSelf() { lst = [ "one", "two" ]; lst.retainAll(lst); return test.expect(#lst, 2); }
+
+	@Test(name = "(lang Buffer) Reading a string past the end is refused.")
+	public bufferStringPastEnd() {
+		this.f9buff = new Buffer(16);
+		return test.expectThrowsMessage(::stringPastEnd, "runs past the end of a buffer");
+	}
+
+	/** Callback for bufferStringPastEnd. */
+	public stringPastEnd() { this.f9buff.getStringAt(64, 0); }
+
+	// Past the int64 millisecond range Java's Instant throws; C must not
+	// overflow.
+	@Test(name = "(lang Date) addDays past the range throws.")
+	public dateAddDaysOutOfRange() {
+		d = new Date(); d.setTime(0);
+		try { d.addDays(9223372036854775807); } catch (e) {
+			return test.expect(d.getTime(), 0);
+		}
+		return test.expect("no exception", "exception");
+	}
+
+	@Test(name = "(lang Date) setHours outside 0-23 throws, as Java's withHour does.")
+	public dateSetHoursRange() {
+		d = new Date(); d.setTime(0); ex = '';
+		try { d.setHours(25); } catch (e) { ex = e.getText(); }
+		test.expect(d.getTime(), 0);
+		return test.expect(ex.contains("Invalid value for HourOfDay (valid values 0 - 23): 25"), true);
+	}
+
+	@Test(name = "(lang Date) A setter argument too large for an int is an error, not wrapped.")
+	public dateSetHoursIntCast() {
+		d = new Date(); d.setTime(0); ex = '';
+		try { d.setHours(4294967301); } catch (e) { ex = e.getText(); }
+		return test.expect(ex, "Date.setHours(): Value 4294967301 is larger than the maximum int value 2147483647.");
+	}
+
+	@Test(name = "(lang Date) setMinutes and setSeconds outside 0-59 throw.")
+	public dateSetMinSecRange() {
+		d = new Date(); d.setTime(0); ex = '';
+		try { d.setMinutes(60); } catch (e) { ex = e.getText(); }
+		test.expect(ex.contains("Invalid value for MinuteOfHour (valid values 0 - 59): 60"), true);
+		ex = '';
+		try { d.setSeconds(-1); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("Invalid value for SecondOfMinute (valid values 0 - 59): -1"), true);
+	}
+
+	@Test(name = "(lang Date) setYear and setMonth outside their ranges throw.")
+	public dateSetYearMonthRange() {
+		d = new Date(); d.setTime(0); ex = '';
+		try { d.setYear(1000000000); } catch (e) { ex = e.getText(); }
+		test.expect(ex.contains("Invalid value for Year (valid values -999999999 - 999999999): 1000000000"), true);
+		ex = '';
+		try { d.setMonth(13); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("Invalid value for MonthOfYear (valid values 1 - 12): 13"), true);
+	}
+
+	@Test(name = "(lang Date) setDayOfMonth throws for a day the month does not have.")
+	public dateSetDayOfMonthRange() {
+		d = new Date(); d.setTime(0); d.setMonth(2); ex = '';
+		try { d.setDayOfMonth(32); } catch (e) { ex = e.getText(); }
+		test.expect(ex.contains("Invalid value for DayOfMonth (valid values 1 - 28/31): 32"), true);
+		ex = '';
+		try { d.setDayOfMonth(30); } catch (e) { ex = e.getText(); }
+		test.expect(ex.contains("Invalid date 'FEBRUARY 30'"), true);
+		ex = '';
+		try { d.setDayOfMonth(29); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("Invalid date 'February 29' as '1970' is not a leap year"), true);
+	}
+
+	@Test(name = "(lang Date) addYears past the range throws.")
+	public dateAddYearsOutOfRange() {
+		d = new Date(); d.setTime(0);
+		try { d.addYears(9223372036854775807); } catch (e) { return true; }
+		return test.expect("no exception", "exception");
+	}
+
+	// A Date holds a java.time.Instant (seconds plus nanoseconds), so it
+	// reaches well past the range of epoch milliseconds. Only getTime(),
+	// which returns milliseconds, overflows there.
+	@Test(name = "(lang Date) addMillis past the max millisecond works; getTime overflows.")
+	public dateAddMillisPastMaxMillis() {
+		d = new Date(); d.setTime(9223372036854775807);
+		d.addMillis(1);
+		ex = '';
+		try { d.getTime(); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("long overflow"), true);
+	}
+
+	@Test(name = "(lang Date) setHours on the min millisecond works.")
+	public dateSetHoursAtMinMillis() {
+		d = new Date(); d.setTime(-9223372036854775807 - 1);
+		d.setHours(0);
+		return test.expect(d.getHours() + " " + d.getYear(), "0 -292275055");
+	}
+
+	@Test(name = "(lang Date) the min and max milliseconds print as Java does.")
+	public dateExtremesToString() {
+		a = new Date(); a.setTime(9223372036854775807);
+		b = new Date(); b.setTime(-9223372036854775807 - 1);
+		return test.expect(a.toString() + " " + b.toString(),
+			"+292278994-08-17T07:12:55.807Z +292275056-05-16T16:47:04.192Z");
+	}
+
+	@Test(name = "(lang Date) Years outside 0001 - 9999 print as Java does.")
+	public dateYearPrinting() {
+		d = new Date(0);
+		out = [];
+		for (y : [5, -5, 0, 10000, 123456]) {
+			d.setYear(y);
+			out.add(d.toString().substr(0, 11) + " " + d.format("y|yy|yyy|yyyy|yyyyy"));
+		}
+		return test.expect(out.join(";"),
+			"0005-01-01T 5|05|005|0005|00005;0006-01-01T 6|06|006|0006|00006;" +
+			"0001-01-01T 1|01|001|0001|00001;+10000-01-0 10000|00|10000|+10000|10000;" +
+			"+123456-01- 123456|56|123456|+123456|+123456");
+	}
+
+	@Test(name = "(lang Date) setYear reaches year 999,999,999.")
+	public dateSetYearFarFuture() {
+		d = new Date(0);
+		d.setYear(999999999);
+		ex = '';
+		try { d.getTime(); } catch (e) { ex = e.getText(); }
+		return test.expect(d.toString() + " " + d.getYear() + " " + ex.contains("long overflow"),
+			"+999999999-01-01T00:00:00.000Z 999999999 true");
+	}
+
+	@Test(name = "(lang Date) Past year 999,999,999 the fields cannot be read.")
+	public dateBeyondLocalDateTime() {
+		d = new Date(0);
+		d.setYear(999999999); d.setMonth(12); d.setDayOfMonth(31);
+		d.addDays(1);
+		ex = '';
+		try { d.getYear(); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("Invalid value for EpochDay (valid values -365243219162 - 365241780471): 365241780472"), true);
+	}
+
+	@Test(name = "(lang Date) Arithmetic overflow reports Java's errors.")
+	public dateArithmeticOverflow() {
+		ex = '';
+		d = new Date(0);
+		try { d.addDays(9223372036854775807); } catch (e) { ex = e.getText(); }
+		if (!ex.contains("long overflow")) { return test.fail("addDays: " + ex); }
+		try { d.addSeconds(9223372036854775807); } catch (e) { ex = e.getText(); }
+		if (!ex.contains("Instant exceeds minimum or maximum instant")) { return test.fail("addSeconds: " + ex); }
+		try { d.addMonths(24000000000); } catch (e) { ex = e.getText(); }
+		if (!ex.contains("Invalid value for Year (valid values -999999999 - 999999999): 2000001970")) { return test.fail("addMonths: " + ex); }
+		d.addMillis(9223372036854775807);
+		d.addMillis(9223372036854775807);
+		return test.expect(d.toString(), "+584556019-04-03T14:25:51.614Z");
+	}
+
+	@Test(name = "(lang Date) now() keeps nanoseconds.")
+	public dateNowNanos() {
+		d = new Date(); d.now();
+		e = d.copy();
+		f = new Date(d.getTime());
+		// Ten tries, since a now() can land on a whole millisecond.
+		for (i = 0; i < 10 && d.isSame(f); i++) { d.now(); f = new Date(d.getTime()); }
+		return test.expect(d.format("SSSSSSSSS").length() + " " + d.isSame(f) + " " + e.isSame(e), "9 false true");
+	}
+
+	@Test(name = "(lang Date) between follows ChronoUnit.between.")
+	public dateBetweenJava() {
+		d = new Date(1700000000000); d.addMillis(-1);
+		e = new Date(0); e.setYear(2021); e.setMonth(3); e.setDayOfMonth(31); e.setHours(5);
+		out = [];
+		for (u : ["millis", "seconds", "minutes", "hours", "days", "weeks", "months", "years"]) {
+			out.add(e.between(d, u));
+		}
+		ex = '';
+		try { e.between(d, "fortnights"); } catch (x) { ex = x.getText(); }
+		return test.expect(out.join(",") + " " + ex,
+			"82833199999,82833199,1380553,23009,958,136,31,2 Date.between(): unknown unit 'fortnights'. " +
+			"Allowed units are millis, seconds, minutes, hours, days, weeks, months, years.");
+	}
+
+	@Test(name = "(lang Date) getWeekOfYear and day names at year edges.")
+	public dateWeekEdges() {
+		out = [];
+		for (ymd : [[2020, 12, 31], [2021, 1, 3], [2024, 12, 30], [2027, 1, 1], [-5, 1, 1], [10000, 6, 15]]) {
+			d = new Date(0); d.setYear(ymd[0]); d.setMonth(ymd[1]); d.setDayOfMonth(ymd[2]);
+			out.add(d.getWeekOfYear() + d.getDayOfWeekName().substr(0, 3));
+		}
+		return test.expect(out.join(","), "53THU,53SUN,1MON,53FRI,52SUN,24THU");
+	}
+
+	@Test(name = "(lang Date) parse reads yyyy and S as Java does.")
+	public dateParseYearFraction() {
+		d = new Date(0);
+		d.parse("+10000-01-01", "yyyy-MM-dd");
+		a = d.toString();
+		d.parse("2024-01-01 12:00:00.123456", "yyyy-MM-dd HH:mm:ss.SSSSSS");
+		b = d.format("SSSSSSSSS") + " " + d.getTime();
+		ex = '';
+		try { d.parse("10000-01-01", "yyyy-MM-dd"); } catch (e) { ex = e.getText(); }
+		return test.expect(a + " " + b + " " + ex.contains("Date.parse(): Parse exception."),
+			"+10000-01-01T00:00:00.000Z 123456000 1704110400123 true");
+	}
+
+	@Test(name = "(lang Date) json.unpack reads ISO 8601 as Java does.")
+	public dateUnpackIso() {
+		a = json.unpack("{\"type\":\"Date\",\"value\":\"+10000-01-01T00:00:00.000Z\"}");
+		b = json.unpack("{\"type\":\"Date\",\"value\":\"2024-01-01T10:00:00.123456789+02:00\"}");
+		c2 = json.unpack("{\"type\":\"Date\",\"value\":\"2024-01-01T10:00Z\"}");
+		ex = '';
+		try { json.unpack("{\"type\":\"Date\",\"value\":\"bad\"}"); } catch (e) { ex = e.getText(); }
+		return test.expect(a.toString() + " " + b.toString() + " " + b.format("SSSSSSSSS") + " " + c2.toString() + " " +
+			ex.contains("json.unpack(): Getting value for key 'value'. Parse exception of String (ISO 8601) with value 'bad'."),
+			"+10000-01-01T00:00:00.000Z 2024-01-01T08:00:00.123Z 123456789 2024-01-01T10:00:00.000Z true");
+	}
+
+	@Test(name = "(lang Date) between past the range throws.")
+	public dateBetweenOutOfRange() {
+		a = new Date(); a.setTime(9223372036854775807);
+		b = new Date(); b.setTime(-9223372036854775807 - 1);
+		try { a.between(b); } catch (e) { return true; }
+		return test.expect("no exception", "exception");
+	}
+
+	@Test(name = "(lang SecurityManager) A new object starts from the standard properties, not the engine's.")
+	public secmanInstStartsFromDefaults() {
+		// The test run grants test.mock.spy; a new SecurityManager starts
+		// from SecurityManagerImpl's properties, where it is off.
+		test.expect(secman.getProp('test.mock.spy'), true);
+		sman = new SecurityManager();
+		return test.expect(sman.getProp('test.mock.spy'), false);
+	}
+
+	@Test(name = "(lang SecurityManager) Setting a property to null removes it.")
+	public secmanInstSetNullRemoves() {
+		sman = new SecurityManager();
+		sman.setProp('secman.test', true);
+		sman.setProp('secman.test', null);
+		return test.expect(sman.keySet().contains('secman.test'), false);
+	}
+
+	@Test(name = "(lang SecurityManager) setProp refuses an object and names its type.")
+	public secmanInstSetPropObject() {
+		sman = new SecurityManager(); ex = '';
+		try { sman.setProp('secman.test', new cbIdentity()); } catch (e) { ex = e.getText(); }
+		return test.expect(ex, "securitymanager.setProp(): Expecting simple type, list or map but found 'com.aussom.types.AussomObject' instead.");
+	}
+
+	@Test(name = "(lang SecurityManager) setMap stores nothing when one value is refused.")
+	public secmanInstSetMapAllOrNothing() {
+		sman = new SecurityManager();
+		try { sman.setMap({ 'secman.a': 1, 'secman.b': new cbIdentity() }); } catch (e) { }
+		return test.expect(sman.keySet().contains('secman.a'), false);
+	}
+
+	@Test(name = "(lang secman) secman has no setMap method, as in Java's ASecMan.")
+	public secmanNoSetMap() {
+		ex = '';
+		try { secman.setMap({ 'secman.a': 1 }); } catch (e) { ex = e.getText(); }
+		return test.expect(ex != '', true);
+	}
+
+	@Test(name = "(aunit) test.runTestsForClass runs one class in a fresh engine.")
+	public runTestsForClassSample() {
+		r = test.runTestsForClass('rtfcSample');
+		test.expect(r.get('total'), 1);
+		return test.expect(r.get('passed'), 1);
+	}
+
+	@Test(name = "(aunit) test.runTestsForClass reports a class that does not exist.")
+	public runTestsForClassMissing() {
+		ex = '';
+		try { test.runTestsForClass('noSuchClassHere'); } catch (e) { ex = e.getText(); }
+		return test.expect(ex, "test.runTestsForClass(): Provided class 'noSuchClassHere' not found.");
+	}
+
+	// Source for the testRunner hook tests. check() passes only on the
+	// first run after runBefore, so it shows which object runTest used.
+	public trHookSrc() {
+		src = "include aunit;\n";
+		src += "@Test(name = \"trHook\")\n";
+		src += "class trHookA {\n";
+		src += "  public count = 0;\n";
+		src += "  @Before public setup() { this.count = 10; }\n";
+		src += "  @After public teardown() { if (this.count != 11) { throw \"after saw \" + this.count; } }\n";
+		src += "  @Test(name = \"check\") public check() { this.count++; if (this.count != 11) { throw \"count \" + this.count; } return 0; }\n";
+		src += "  public helper() { return 1; }\n";
+		src += "}\n";
+		src += "@Test(name = \"trPlain\")\n";
+		src += "class trHookB {\n";
+		src += "  @Test(name = \"p\") public p() { return 0; }\n";
+		src += "}\n";
+		return src;
+	}
+
+	@Test(name = "(testRunner) runBefore, runTest and runAfter share one object.")
+	public testRunnerHooksShareObject() {
+		r = new testRunner();
+		r.loadTestString("trHook", this.trHookSrc());
+		if (r.runBefore("trHookA") != r) { return test.fail("runBefore did not return the runner"); }
+		if (r.runTest("trHookA", "check") != r) { return test.fail("runTest did not return the runner"); }
+		if (r.runAfter("trHookA") != r) { return test.fail("runAfter did not return the runner"); }
+		ex = '';
+		try { r.runTest("trHookA", "check"); } catch (e) { ex = e.getText(); }
+		// The test's exception reaches the script wrapped, as in Java.
+		return test.expect(ex.contains("count 12"), true);
+	}
+
+	@Test(name = "(testRunner) runBefore starts a new object.")
+	public testRunnerBeforeResets() {
+		r = new testRunner();
+		r.loadTestString("trHook", this.trHookSrc());
+		r.runBefore("trHookA");
+		r.runTest("trHookA", "check");
+		r.runBefore("trHookA");
+		return test.expect(r.runTest("trHookA", "check") == r, true);
+	}
+
+	@Test(name = "(testRunner) runTest, runBefore and runAfter errors match Java.")
+	public testRunnerRunErrors() {
+		r = new testRunner();
+		r.loadTestString("trHook", this.trHookSrc());
+		ex = '';
+		try { r.runTest("trHookA", "helper"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.runTest(): Provided class 'trHookA' function 'helper' has no @Test annotation.") { return test.fail(ex); }
+		try { r.runTest("trHookA", "nofn"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.runTest(): Provided class 'trHookA' has no function 'nofn'.") { return test.fail(ex); }
+		try { r.runTest("nope", "check"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.runTest(): Provided class 'nope' not found.") { return test.fail(ex); }
+		try { r.runBefore("trHookB"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.hasBefore(): Provided class 'trHookB' has no @Before function set.") { return test.fail(ex); }
+		try { r.runAfter("trHookB"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.hasAfter(): Provided class 'trHookB' has no @After function set.") { return test.fail(ex); }
+		try { r.runAfter("nope"); } catch (e) { ex = e.getText(); }
+		return test.expect(ex, "testRunner.hasAfter(): Provided class 'nope' not found.");
+	}
+
+	@Test(name = "(testRunner) clearClassObjectCache returns the runner.")
+	public testRunnerClearCache() {
+		r = new testRunner();
+		return test.expect(r.clearClassObjectCache() == r, true);
+	}
+
+	@Test(name = "(testRunner) Loads add to one runner engine.")
+	public testRunnerLoadsAccumulate() {
+		r = new testRunner();
+		r.loadTestString("trHook", this.trHookSrc());
+		r.loadTestString("trMore", "include aunit; @Test(name = \"m\") class trMoreA { @Test(name = \"m\") public m() { return 0; } }");
+		// Java lists them in hash map order, so compare them sorted.
+		names = r.getTestClasses();
+		names.sortAsc();
+		return test.expect(names.join(","), "trHookA,trHookB,trMoreA");
+	}
+
+	@Test(name = "(testRunner) A file with no classes fails to load.")
+	public testRunnerLoadNoClasses() {
+		r = new testRunner();
+		ex = '';
+		try { r.loadTestString("trNone", "include aunit;"); } catch (e) { ex = e.getText(); }
+		return test.expect(ex.contains("Engine.runTest(): No classes found for that script file."), true);
+	}
+
+	@Test(name = "(testRunner) Unknown class or function errors match Java.")
+	public testRunnerLookupErrors() {
+		r = new testRunner();
+		r.loadTestString("trHook", this.trHookSrc());
+		ex = '';
+		try { r.getTestFunctions("nope"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.getTestFunctions(): Provided class 'nope' not found.") { return test.fail(ex); }
+		try { r.hasOnTestFail("nope"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.hasOnTestFail(): Provided class 'nope' not found.") { return test.fail(ex); }
+		try { r.runClassTests("nope"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.runClassTests(): Provided class 'nope' not found.") { return test.fail(ex); }
+		try { r.getTestTags("trHookA", "helper"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.getTestTags(): Function 'helper' not found on class 'trHookA'.") { return test.fail(ex); }
+		try { r.getTestTimeoutMs("trHookA", "helper"); } catch (e) { ex = e.getText(); }
+		if (ex != "testRunner.getTestTimeoutMs(): Function 'helper' not found on class 'trHookA'.") { return test.fail(ex); }
+		try { r.shouldRun("trHookA", "helper"); } catch (e) { ex = e.getText(); }
+		return test.expect(ex, "testRunner.shouldRun(): Function 'helper' not found on class 'trHookA'.");
+	}
+
+	@Test(name = "(testRunner) A throwing @Before or @After ends runClassTests with its exception.")
+	public testRunnerHookThrows() {
+		r = new testRunner();
+		src = "include aunit;\n";
+		src += "@Test(name = \"b\") class trBoomB { @Before public b() { throw \"before boom\"; } @Test(name = \"t\") public t() { return 0; } }\n";
+		src += "@Test(name = \"a\") class trBoomA { @After public a() { throw \"after boom\"; } @Test(name = \"t\") public t() { return 0; } }\n";
+		r.loadTestString("trBoom", src);
+		exb = '';
+		try { r.runClassTests("trBoomB"); } catch (e) { exb = e.getText(); }
+		exa = '';
+		try { r.runClassTests("trBoomA"); } catch (e) { exa = e.getText(); }
+		return test.expect(exb.contains("before boom") + " " + exa.contains("after boom"), "true true");
+	}
+
+	@Test(name = "(overloads) A call with no matching overload names the class and call signature.")
+	public overloadNotFoundMessage() {
+		ex = '';
+		try { this.noSuchFunction(1, "a", null); } catch (e) { ex = e.getId() + " " + e.getText(); }
+		return test.expect(ex, "FUNCT_NOT_FOUND Object 'cInterpreterTests' has no overload of 'noSuchFunction' matching call signature 'i,s,n'.");
+	}
+
+	@Test(name = "(extern) Null in a typed extern parameter fails as a cast in the method.")
+	public externNullArgCast() {
+		out = [];
+		try { "abc".contains(null); } catch (e) { out.add(e); }
+		try { [1].removeAll(null); } catch (e) { out.add(e); }
+		try { {}.putAll(null); } catch (e) { out.add(e); }
+		res = [];
+		for (e : out) {
+			t = e.getText();
+			res.add(e.getId() == "EXTERN_INVOCATION_TARGET_EXCEPTION"
+				&& t.contains("External call, invocation target exception for method '")
+				&& t.contains("ClassCastException") && t.contains("AussomNull"));
+		}
+		return test.expect(res.join(","), "true,true,true");
+	}
+
+	@Test(name = "(extern) Date.between accepts a null unit as millis.")
+	public externNullDateBetween() {
+		d = new Date(1000);
+		e = new Date(3500);
+		return test.expect(d.between(e, null), 2500);
+	}
+
+	@Test(name = "(obj) Object path errors use astObj's messages.")
+	public objPathMessages() {
+		out = [];
+		try { x = nope; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		m = {a: 1};
+		try { x = m.zz; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		l = [1];
+		try { x = l[5]; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		try { x = l.foo; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		try { x = "abc".foo; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		try { x = c; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		try { x = this[5]; } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		return test.expect(out.join("; "),
+			"UNDEFINED_NAME astObj.evalObjStart(): Undefined name 'nope'.; " +
+			"MAP_MISSING_KEY astObj.evalObj(): Map doesn't have key 'zz'.; " +
+			"INDEX_OUT_OF_BOUNDS astObj.evalObj(): Index out of bounds.; " +
+			"INDEX_NOT_FOUND astObj.evalObj(): List found but no index found.; " +
+			"NO_MEMBER_FOUND astObj.evalObj(): Unmatched object type for 'foo'.; " +
+			"NO_OPERATION astObj.evalObjStart(): Static class object found but no child function or property provided.; " +
+			"INDEX_NOT_FOUND astObj.evalObj(): Provided index isn't a string value.");
+	}
+
+	@Test(name = "(overloads) An ambiguous call lists the candidate overloads.")
+	public overloadAmbiguousMessage() {
+		o = new ovAmbig();
+		out = [];
+		try { o.p(1, 2); } catch (e) { out.add(e.getId() + " " + e.getText()); }
+		try { o.w(1, 2); } catch (e) { out.add(e.getText()); }
+		try { o.v(1, 2, 3); } catch (e) { out.add(e.getText()); }
+		return test.expect(out.join("; "),
+			"AMBIGUOUS_OVERLOAD Call to 'ovAmbig' is ambiguous between: p(d,i), p(i,d); " +
+			"Call to 'ovAmbig' is ambiguous between: w(i,*), w(*,i); " +
+			"Call to 'ovAmbig' is ambiguous between: v(*,i,...), v(i,*,...)");
+	}
+
+	@Test(name = "(new) A class with two extern parents fails as Java's new reports it.")
+	public newTwoExternParents() {
+		ex = '';
+		try { o = new twoExternParents(); } catch (e) {
+			ex = e.getId() + " " + e.getText() + " " +
+				e.getStackTrace().contains("Cannot inherit from two external classes. First is 'com.aussom.stdlib.ADate' and second is 'SecurityManager'.");
+		}
+		return test.expect(ex, "INSTANTIATION_FAILURE Instantiation threw exception. true");
+	}
+
+	@Test(name = "(security) A SecurityManager subclass without manager state gets a fresh manager.")
+	public secmanSubclassFreshState() {
+		x = new secmanBindSub();
+		return test.expect(x.getProp("a"), null);
+	}
+
+	@Test(name = "(security) setIncludeTags and setExcludeTags refuse a value that is not a list.")
+	public tagsNotAList() {
+		t = new tagsBind();
+		got = [];
+		for (v : ["abc", 1, null, {}]) {
+			try { t.setIncludeTags(v); got.add("ok"); } catch (e) { got.add(e.getText()); }
+		}
+		ex = "";
+		try { t.setExcludeTags(2.5); } catch (e) { ex = e.getText(); }
+		pre = "External call, invocation target exception for method 'setIncludeTags', the external method threw an uncaught exception: java.lang.ClassCastException: class com.aussom.types.";
+		post = " cannot be cast to class com.aussom.types.AussomList";
+		return test.expect(got.join("|"), pre + "AussomString" + post + "|" + pre + "AussomInt" + post + "|" +
+				pre + "AussomNull" + post + "|" + pre + "AussomMap" + post) &&
+			test.expect(ex.contains("AussomDouble cannot be cast to class com.aussom.types.AussomList"), true);
+	}
+
+	@Test(name = "(security) A Date binding that skips newDate keeps its own state, as in Java.")
+	public dateBindKeepsState() {
+		d = new dateBind();
+		d.setTime(5000);
+		return test.expect(d.getTime(), 5000);
+	}
+
+	@Test(name = "(security) A testRunner subclass without runner state has no runner, as in Java.")
+	public runnerSubclassNoRunner() {
+		x = new runnerBindSub();
+		ex = "";
+		try { x.loadTestString("rbs", "class rbs { }"); } catch (e) { ex = e.getId() + " " + e.getText(); }
+		ex2 = "";
+		try { x.getTestClasses(); } catch (e) { ex2 = e.getText(); }
+		return test.expect(ex, "EXTERN_INVOCATION_TARGET_EXCEPTION External call, invocation target exception for method 'loadTestString', the external method threw an uncaught exception: java.lang.NullPointerException: Cannot invoke \"com.aussom.stdlib.UnitTestRunner.parseString(String, String)\" because \"this.runner\" is null") &&
+			test.expect(ex2.contains("UnitTestRunner.getTestClasses()"), true);
+	}
+
+	@Test(name = "(new) An unknown class fails as Java's new reports it.")
+	public newUnknownClass() {
+		ex = '';
+		try { o = new noSuchClassAnywhere(); } catch (e) { ex = e.getId() + " " + e.getText(); }
+		return test.expect(ex, "INSTANTIATION_FAILURE Cannot instantiate object of type 'noSuchClassAnywhere', class definition not found in engine.");
+	}
+
+	@Test(name = "(testRunner) setIncludeTags keeps its own copy of the tags.")
+	public testRunnerTagsCopied() {
+		r = new testRunner();
+		r.loadTestString("trTags", "include aunit; @Test(name = \"t\") class trTagsA { @Test(name = \"t\", tags = \"a\") public t() { return 0; } }");
+		tags = ["a"];
+		r.setIncludeTags(tags);
+		tags.clear();
+		tags.add("zzz");
+		return test.expect(r.shouldRun("trTagsA", "t"), true);
+	}
+
+	@Test(name = "(lang SecurityManager) A new object carries its own policy, not the engine's.")
+	public secmanInstIsNotEnginePolicy() {
+		sman = new SecurityManager();
+		// Writing the instance must not change what the running
+		// program may do. It is a policy value, not the engine's
+		// policy; there is no way to install it into a live engine.
+		sman.setProp('os.info.view', true);
+		test.expect(sman.getProp('os.info.view'), true);
+		return test.expect(secman.getProp('os.info.view'), false);
+	}
+
+	// Lists and maps are mutable, so policy goes in and out as a copy.
+	// Editing a returned list must not change the engine's policy.
+	@Test(name = "(lang secman) getProp returns a copy of a list property.")
+	public secmanGetPropIsCopy() {
+		n = secman.getProp('aussom.extern.allowed').size();
+		secman.getProp('aussom.extern.allowed').add('com.evil.*');
+		return test.expect(secman.getProp('aussom.extern.allowed').size(), n);
+	}
+
+	@Test(name = "(lang secman) getMap returns copies of list properties.")
+	public secmanGetMapIsCopy() {
+		n = secman.getProp('aussom.extern.allowed').size();
+		secman.getMap()['aussom.extern.allowed'].add('com.evil.*');
+		return test.expect(secman.getProp('aussom.extern.allowed').size(), n);
+	}
+
+	@Test(name = "(lang SecurityManager) An instance does not share lists with the engine.")
+	public secmanInstListIsCopy() {
+		n = secman.getProp('aussom.extern.allowed').size();
+		sman = new SecurityManager();
+		sman.getProp('aussom.extern.allowed').add('com.evil.*');
+		sman.setProp('aussom.extern.allowed', sman.getProp('aussom.extern.allowed'));
+		test.expect(sman.getProp('aussom.extern.allowed').size(), n);
+		return test.expect(secman.getProp('aussom.extern.allowed').size(), n);
+	}
+
+	@Test(name = "(lang SecurityManager) setProp stores a copy of a list.")
+	public secmanSetPropStoresCopy() {
+		sman = new SecurityManager();
+		l = ['a'];
+		sman.setProp('test.list', l);
+		l.add('b');
+		return test.expect(sman.getProp('test.list').size(), 1);
+	}
+
+	/***********************************************************************
+	 * Call depth tests
+	 *
+	 * Unbounded recursion in this runtime is a native stack overflow,
+	 * which kills the process; there is no equivalent of catching a
+	 * StackOverflowError after the fact. The depth limit is what turns
+	 * it into an ordinary Aussom exception, so these also pin that the
+	 * interpreter survives.
+	 *********************************************************************/
+	// The limit of 1000 calls needs about 1.35 MB of native stack. On a
+	// thread with less, the stack guard stops the recursion first with
+	// STACK_OVERFLOW. Either is the catchable exception this pins; the
+	// call depth limit itself is pinned on a large stack in
+	// tests/test_engine.c.
+	@Test(name = "(engine) Runaway recursion raises a catchable exception.")
+	public callDepthExceeded() {
+		id = this.caughtId(::infiniteRecursion);
+		return test.expect(id == "CALL_DEPTH_EXCEEDED" || id == "STACK_OVERFLOW", true, "Got: " + id);
+	}
+
+	/** Callback for callDepthExceeded. */
+	public infiniteRecursion() { this.recurse(1); }
+
+	/** Recurses without a base case. */
+	public recurse(int n) { return this.recurse(n + 1); }
+
+	/***********************************************************************
+	 * Stack overflow tests
+	 *
+	 * The interpreter walks code and values by recursion on the native
+	 * stack. In Java, running out is a StackOverflowError the engine turns
+	 * into a STACK_OVERFLOW exception. In C it would be SIGSEGV, so the
+	 * stack guard (include/aussom/stack_guard.h) stops before the stack
+	 * runs out and raises STACK_OVERFLOW instead. These run real overflows:
+	 * values that contain themselves and data nested far deeper than any
+	 * thread's stack can hold, through every path that walks a value.
+	 * Each must end in the exception, never a crash or a hang, and the
+	 * interpreter must keep working afterward.
+	 *
+	 * Deep expressions in code are covered in tests/test_engine.c, which
+	 * can generate the source. So is printing deeply nested data that
+	 * does not contain itself: the printed form is indented one tab per
+	 * level, so its size grows with the square of the depth, and on a
+	 * large stack reaching the guard takes gigabytes of output (Java has
+	 * the same cost, cut short sooner by its smaller stack). The C test
+	 * runs it on a small thread stack instead.
+	 *********************************************************************/
+
+	/** Runs Cb and returns the id of the exception it raised, or "none". */
+	public caughtId(callback Cb) {
+		try { Cb.call(); } catch (e) { return e.getId(); }
+		return "none";
+	}
+
+	/** A list that contains itself. */
+	public selfList() { l = [1]; l.add(l); return l; }
+
+	/** A map that contains itself. */
+	public selfMap() { m = {"a": 1}; m["self"] = m; return m; }
+
+	/** Lists nested 1,000,000 deep: more than any thread's stack holds.
+	 * Built once and shared, since building it takes about a second. */
+	public deepList() {
+		if (this.deepListCache == null) {
+			l = [];
+			for (i = 0; i < 1000000; i++) { l = [l]; }
+			this.deepListCache = l;
+		}
+		return this.deepListCache;
+	}
+
+	public deepListCache = null;
+
+	public soListToJson() { this.selfList().toJson(); }
+	public soMapToJson() { this.selfMap().toJson(); }
+	public soListPack() { this.selfList().pack(); }
+	public soMapPack() { this.selfMap().pack(); }
+	public soListClone() { this.selfList().clone(); }
+	public soListConcat() { s = "x" + this.selfList(); }
+	public soMapConcat() { s = "x" + this.selfMap(); }
+	public soListEquals() { b = (this.selfList() == "x"); }
+	public soListThrow() { throw this.selfList(); }
+	public soObjConcat() { o = new stackSelfRef(); s = "x" + o; }
+	public soDeepToJson() { this.deepList().toJson(); }
+	public soDeepPack() { this.deepList().pack(); }
+	public soDeepClone() { this.deepList().clone(); }
+
+	@Test(name = "(stack overflow) toJson of a list that contains itself.")
+	public stackListToJson() { return test.expect(this.caughtId(::soListToJson), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) toJson of a map that contains itself.")
+	public stackMapToJson() { return test.expect(this.caughtId(::soMapToJson), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) pack of a list that contains itself.")
+	public stackListPack() { return test.expect(this.caughtId(::soListPack), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) pack of a map that contains itself.")
+	public stackMapPack() { return test.expect(this.caughtId(::soMapPack), "STACK_OVERFLOW"); }
+
+	// list.clone is shallow, as ArrayList.clone is, so it does not walk
+	// into the list it holds and cannot run out of stack.
+	@Test(name = "(stack overflow) clone of a list that contains itself.")
+	public stackListClone() { return test.expect(this.caughtId(::soListClone), "none"); }
+
+	@Test(name = "(stack overflow) Concatenating a list that contains itself.")
+	public stackListConcat() { return test.expect(this.caughtId(::soListConcat), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) Concatenating a map that contains itself.")
+	public stackMapConcat() { return test.expect(this.caughtId(::soMapConcat), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) Comparing a list that contains itself to a string.")
+	public stackListEquals() { return test.expect(this.caughtId(::soListEquals), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) Throwing a list that contains itself.")
+	public stackListThrow() { return test.expect(this.caughtId(::soListThrow), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) Concatenating an object whose member is itself.")
+	public stackObjConcat() { return test.expect(this.caughtId(::soObjConcat), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) Logging a list that contains itself prints nothing and raises.")
+	public stackListLog() {
+		id = "none";
+		try { c.log(this.selfList()); } catch (e) { id = e.getId(); }
+		return test.expect(id, "STACK_OVERFLOW");
+	}
+
+	@Test(name = "(stack overflow) A list that contains itself as a map key stores nothing.")
+	public stackListAsKey() {
+		m = {};
+		id = "none";
+		try { m[this.selfList()] = 1; } catch (e) { id = e.getId(); }
+		test.expect(id, "STACK_OVERFLOW");
+		return test.expect(#m, 0);
+	}
+
+	@Test(name = "(stack overflow) setProp of a list that contains itself stores nothing.")
+	public stackSecmanSetProp() {
+		sman = new SecurityManager();
+		id = "none";
+		try { sman.setProp("test.self", this.selfList()); } catch (e) { id = e.getId(); }
+		test.expect(id, "STACK_OVERFLOW");
+		return test.expectNull(sman.getProp("test.self"));
+	}
+
+	@Test(name = "(stack overflow) toJson of lists nested 1,000,000 deep.")
+	public stackDeepToJson() { return test.expect(this.caughtId(::soDeepToJson), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) pack of lists nested 1,000,000 deep.")
+	public stackDeepPack() { return test.expect(this.caughtId(::soDeepPack), "STACK_OVERFLOW"); }
+
+	@Test(name = "(stack overflow) clone of lists nested 1,000,000 deep.")
+	public stackDeepClone() { return test.expect(this.caughtId(::soDeepClone), "none"); }
+
+	@Test(name = "(stack overflow) The exception carries Java's text and the interpreter keeps working.")
+	public stackOverflowThenContinue() {
+		text = "";
+		try { this.selfList().toJson(); } catch (e) { text = e.getText(); }
+		test.expectTrue(text.contains("ran out of stack space"), "Got: " + text);
+		l = [1, [2, 3], {"a": [4]}];
+		test.expect(l.toJson(), '[1,[2,3],{"a":[4]}]');
+		return test.expect("" + [1, 2], "" + [1, 2]);
+	}
+
+	@Test(name = "(stack overflow) A list printed twice side by side is not mistaken for one that contains itself.")
+	public stackSharedNotCycle() {
+		inner = [1];
+		outer = [inner, inner, {"a": inner}];
+		s = "" + outer;
+		return test.expect(outer.toJson(), '[[1],[1],{"a":[1]}]');
+	}
+
+	// Runs the deepest C work a script can reach (a JSON parse at the
+	// nesting limit, regex, number formatting, a sort that calls back
+	// into Aussom, toJson and pack) at every level of a runaway
+	// recursion, so on some level it runs just above the point where
+	// the guard fires. That is the measurement behind the guard's
+	// reserve; a reserve too small for this platform crashes here.
+	@Test(name = "(stack overflow) Heavy C work near the stack limit ends in an exception, not a crash.")
+	public stackReserveHolds() {
+		open = ""; close = "";
+		for (i = 0; i < 999; i++) { open += "["; close += "]"; }
+		this.reserveJson = open + "1" + close;
+		id = this.caughtId(::reserveRecurse);
+		return test.expect(id == "CALL_DEPTH_EXCEEDED" || id == "STACK_OVERFLOW", true, "Got: " + id);
+	}
+
+	public reserveJson = "";
+
+	/** Callback for stackReserveHolds. */
+	public reserveRecurse() { this.reserveLevel(0); }
+
+	/** One level of stackReserveHolds' recursion. */
+	public reserveLevel(int d) {
+		a = json.parse(this.reserveJson);
+		m = regex.match("(a|b)*c+(d?)e", "ababababcccde");
+		s = "x" + 3.14159 + " " + d + " " + [1, 2.5, {"k": [true, null]}];
+		l = [5, 3, 9, 1];
+		l.sortCustom(::reserveCmp);
+		j = [l, {"x": s}].toJson();
+		p = [l, {"x": s}].pack();
+		return this.reserveLevel(d + 1) + 1;
+	}
+
+	/** Comparator for reserveLevel. */
+	public reserveCmp(x, y) { return x - y; }
+
+	/***********************************************************************
+	 * Sleep slicing tests
+	 *
+	 * sys.sleep waits in short slices so a host can cancel or pause a
+	 * sleeping program. These pin that slicing did not change what
+	 * sleep does from a script's point of view.
+	 *********************************************************************/
+	// 60 ms rather than something larger: it still crosses the 50 ms
+	// default slice, so the multi-slice path is exercised, and the
+	// suite does not pay for the rest.
+	@Test(name = "(sys) Sleep waits for at least the requested time.")
+	public sleepWaitsFullDuration() {
+		start = sys.getMills();
+		sys.sleep(60);
+		return test.expect(sys.getMills() - start >= 60, true);
+	}
+
+	@Test(name = "(sys) A negative sleep is refused.")
+	public sleepNegativeRefused() {
+		return test.expectThrowsMessage(::negativeSleep, "must not be negative");
+	}
+
+	/** Callback for sleepNegativeRefused. */
+	public negativeSleep() { sys.sleep(0-1); }
+
+	@Test(name = "(engine) The interpreter keeps running after a depth exception.")
+	public callDepthRecovers() {
+		threw = false;
+		try { this.recurse(1); } catch (e) { threw = true; }
+		test.expect(threw, true);
+		// Ordinary recursion well inside the limit still works, so the
+		// depth counter unwound rather than sticking at the limit.
+		return test.expect(this.countDown(100), 0);
+	}
+
+	/** Bounded recursion used by callDepthRecovers. */
+	public countDown(int n) {
+		if (n <= 0) { return 0; }
+		return this.countDown(n - 1);
+	}
+
+    // ---------- Parse errors: thrown errors stop the parse ----------
+
+    @Test(name = "(parse error) A syntax error stops the load; classes before it still load.")
+    public parseSyntaxErrorKeepsEarlierClasses() {
+        src = "class pseA { @Test(name = \"t\") public t() { return true; } } class pseB { public g( { } }";
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pseKeep", src); } catch (e) { ex = e.getText(); }
+        return test.expect(ex, "");
+    }
+
+    @Test(name = "(parse error) A syntax error before any class leaves no classes to load.")
+    public parseSyntaxErrorNoClasses() {
+        src = "class pseC { public g( { } } class pseD { }";
+        id = ""; ex = "";
+        try { r = new testRunner(); r.loadTestString("pseNone", src); } catch (e) { id = e.getId(); ex = e.getText(); }
+        if (id != "EXTERN_INVOCATION_TARGET_EXCEPTION") { return test.fail("id: " + id); }
+        return test.expect(ex.contains("Engine.runTest(): No classes found for that script file."), true);
+    }
+
+    @Test(name = "(parse error) An int literal over the long range stops the parse.")
+    public parseIntLiteralOverMax() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pIntMax", "class pim { public f() { x = 9223372036854775808; } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("pIntMax [1]: PARSE_ERROR: Integer out of bounds. Integer max size is 9223372036854775807. <9223372036854775808>"), true);
+    }
+
+    @Test(name = "(parse error) An int literal under the long range stops the parse.")
+    public parseIntLiteralUnderMin() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pIntMin", "class pin { public f() { x = -0009223372036854775809; } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("PARSE_ERROR: Integer out of bounds. Integer min size is -9223372036854775808. <-9223372036854775809>"), true);
+    }
+
+    @Test(name = "(parse error) The long range limits themselves parse.")
+    public parseIntLiteralLimits() {
+        x = 9223372036854775807; y = -9223372036854775808;
+        return test.expect(x + "," + y, "9223372036854775807,-9223372036854775808");
+    }
+
+    @Test(name = "(parse error) A double literal over the double range stops the parse.")
+    public parseDoubleLiteralOverMax() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pDblMax", "class pdm { public f() { x = 2.5e308; } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("PARSE_ERROR: Double out of bounds. Double max size is 1.7976931348623157E308. <2.5E+308>"), true);
+    }
+
+    @Test(name = "(parse error) A double literal under the double range stops the parse.")
+    public parseDoubleLiteralUnderMin() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pDblMin", "class pdn { public f() { x = -1e400; } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("PARSE_ERROR: Double out of bounds. Double min size is 2.2250738585072014E-308. <-1.0E+400>"), true);
+    }
+
+    @Test(name = "(parse error) An unknown parameter type stops the parse.")
+    public parseUnknownParamType() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pPrim", "class ppt { public f(foo X) { } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("pPrim [1]: PARSE_ERROR: Expecting primative identifier but found 'foo' instead."), true);
+    }
+
+    @Test(name = "(parse error) A duplicate overload stops the parse.")
+    public parseDuplicateOverload() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pDup", "class pdo { public f(int a, b = 1) { } public f(int c) { } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains(" [0]: Duplicate method overload 'f(i)' declared at pDup:1; first declared at pDup:1."), true);
+    }
+
+    @Test(name = "(parse error) An extern class that isn't found stops the parse.")
+    public parseExternClassNotFound() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pExt", "extern class pec : com.nope.Thing { public pec() { } }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("com.aussom.ast.aussomException: Extern class 'com.nope.Thing' not found."), true);
+    }
+
+    @Test(name = "(parse error) An include that isn't found stops the parse.")
+    public parseIncludeNotFound() {
+        ex = "";
+        try { r = new testRunner(); r.loadTestString("pInc", "include nosuch.thing; class pic { }"); } catch (e) { ex = e.getText(); }
+        return test.expect(ex.contains("Engine.addInclude(): Couldn't find requested include module 'nosuch/thing.aus'."), true);
+    }
+
+    // ---------- Stack trace frames (CallStack) ----------
+
+    @Test(name = "(stack trace) A call pushes a call-site frame and a body frame.")
+    public traceCallFrames() {
+        st = "";
+        try { h = new traceHelper(); h.h1(); } catch (e) { st = e.getStackTrace(); }
+        if (!st.contains("] Defined. { traceHelper.h2() }")) { return test.fail("no h2 body frame: " + st); }
+        if (!st.contains("] Function called. { traceHelper.h2() }")) { return test.fail("no h2 call frame: " + st); }
+        if (!st.contains("] Defined. { traceHelper.h1() }")) { return test.fail("no h1 body frame: " + st); }
+        return test.expect(st.contains("] Function called. { traceHelper.h1() }"), true);
+    }
+
+    @Test(name = "(stack trace) new pushes a constructor frame below the constructor body.")
+    public traceConstructorFrames() {
+        st = "";
+        try { x = new traceCtor(); } catch (e) { st = e.getStackTrace(); }
+        if (!st.contains("] Defined. { traceCtor.traceCtor() }")) { return test.fail("no body frame: " + st); }
+        return test.expect(st.contains("] Constructor called. { traceCtor.traceCtor() }"), true);
+    }
+
+    @Test(name = "(stack trace) An operator overload pushes an operator frame.")
+    public traceOperatorFrame() {
+        st = "";
+        try { a = new traceOp(); b = a + a; } catch (e) { st = e.getStackTrace(); }
+        return test.expect(st.contains("] Operator '+' called. { traceOp.__opAdd__() }"), true);
+    }
+
+    @Test(name = "(extern) An exception an extern method returns without an id gets EXTERN_RUNTIME.")
+    public externExceptionGetsRuntimeId() {
+        id = ""; st = ""; line = -1;
+        try { b = new Buffer(-1); } catch (e) { id = e.getId(); st = e.getStackTrace(); line = e.getLineNumber(); }
+        if (line < 1) { return test.fail("no line: " + line); }
+        if (!st.contains("] Function called. { Buffer.newBuffer() }")) { return test.fail("no call-site trace: " + st); }
+        return test.expect(id, "EXTERN_RUNTIME");
+    }
+
+    // ---------- Reflection: getMethods / getMembers ----------
+
+    @Test(name = "(reflect) getMethods describes each overload's signature, arguments and annotations.")
+    public reflectGetMethodsDetails() {
+        ms = reflect.getClassDef("reflWarm").getMethods();
+        f = ms["f"][0];
+        if (f["signature"] != "i,s,d,i,...") { return test.fail("signature: " + f["signature"]); }
+        if (f["isExtern"]) { return test.fail("isExtern"); }
+        if (#f["annotations"] != 2) { return test.fail("annotations: " + #f["annotations"]); }
+        if (f["annotations"][0]["annotationName"] != "Tag") { return test.fail("annotation name"); }
+        if (f["annotations"][0]["annotationArgs"]["name"] != "t1") { return test.fail("annotation arg"); }
+        args = f["arguments"];
+        if (#args != 5) { return test.fail("argument count: " + #args); }
+        if (args[0]["name"] != "a" || args[0]["requiredType"] != "int" || args[0]["hasDefaultValue"]) { return test.fail("arg a"); }
+        if (args[1]["defaultValue"] != "x" || args[1]["defaultValueType"] != "string") { return test.fail("arg b"); }
+        if (args[2]["requiredType"] != "" || args[2]["defaultValueType"] != "double") { return test.fail("arg c"); }
+        if (args[3]["requiredType"] != "int" || args[3]["defaultValueType"] != "null") { return test.fail("arg d"); }
+        if (args[4]["name"] != "..." || args[4].containsKey("requiredType")) { return test.fail("etcetera"); }
+        return test.expect(#ms["over"], 2);
+    }
+
+    @Test(name = "(reflect) getMembers describes each member's type and annotations.")
+    public reflectGetMembersDetails() {
+        mem = reflect.getClassDef("reflWarm").getMembers()["warmMember"];
+        if (mem["type"] != "LIST") { return test.fail("type: " + mem["type"]); }
+        return test.expect(mem["annotations"][0]["annotationArgs"]["k"], "v");
+    }
+
+    @Test(name = "(reflect) A class not yet instantiated lists only its own methods and members.")
+    public reflectColdClassOwnOnly() {
+        cd = reflect.getClassDef("reflCold");
+        if (cd.getMethods().containsKey("baseOnly")) { return test.fail("inherited method listed"); }
+        if (!cd.getMethods().containsKey("coldOnly")) { return test.fail("own method missing"); }
+        return test.expect(cd.getMembers().containsKey("baseMember"), false);
+    }
+
+    @Test(name = "(reflect) An instantiated class also lists inherited methods and members it does not shadow.")
+    public reflectWarmClassInherited() {
+        w = new reflWarm();
+        cd = reflect.getClassDef("reflWarm");
+        ms = cd.getMethods();
+        if (!ms.containsKey("baseOnly")) { return test.fail("inherited method missing"); }
+        if (!ms.containsKey("toJson")) { return test.fail("object method missing"); }
+        if (#ms["over"] != 2) { return test.fail("shadowed overload listed: " + #ms["over"]); }
+        return test.expect(cd.getMembers().containsKey("baseMember"), true);
+    }
+
+    @Test(name = "(reflect) A class extending only object reports isExtern once instantiated.")
+    public reflectExternAfterInit() {
+        if (reflect.getClassDef("reflCold").isExtern()) { return test.fail("cold class is extern"); }
+        o = new nullDefTyped();
+        cd = reflect.getClassDef("nullDefTyped");
+        if (!cd.isExtern()) { return test.fail("instantiated class not extern"); }
+        return test.expect(cd.getExternClassName(), "com.aussom.types.AussomObject");
+    }
+
+    // ---------- Typed null defaults ----------
+
+    @Test(name = "(overload) A typed slot with a null default keeps its type.")
+    public nullDefaultKeepsType() {
+        o = new nullDefTyped();
+        if (o.f() != "f:null" || o.f(5) != "f:5" || o.f(null) != "f:null") { return test.fail("f calls"); }
+        id = "";
+        try { o.f("s"); } catch (e) { id = e.getId(); }
+        return test.expect(id, "FUNCT_NOT_FOUND");
+    }
+
+    @Test(name = "(overload) A typed null default and a reference overload make null ambiguous.")
+    public nullDefaultAmbiguous() {
+        o = new nullDefTyped();
+        if (o.g("a") != "g2" || o.g(1) != "g1") { return test.fail("g calls"); }
+        id = "";
+        try { o.g(null); } catch (e) { id = e.getId(); }
+        return test.expect(id, "AMBIGUOUS_OVERLOAD");
+    }
+
+    // ---------- Inherited method resolution ----------
+
+    @Test(name = "(inherit) A grandparent's method is merged before the parent's.")
+    public inheritGrandparentFirst() {
+        k = new resKid();
+        return test.expect(k.f(), "gp");
+    }
+
+    // ---------- for loops ----------
+
+    @Test(name = "(for) An exception from the collection expression is a FOR_EXCEPTION.")
+    public forEachOverException() {
+        txt = "";
+        try { for (k : {}.noSuchMethod()) { } } catch (e) { txt = e.getId() + ": " + e.getText(); }
+        return test.expect(txt, "FOR_EXCEPTION: For loop expecting of type LIST or MAP, found 'cException' instead.");
+    }
+
+    @Test(name = "(for) An exception from the init expression is ignored.")
+    public forInitExceptionIgnored() {
+        ran = 0;
+        for (q = {}.noSuchMethod(); ran < 1; ran++) { }
+        return test.expect(ran, 1);
+    }
+
+    // ---------- Object init (:=) ----------
+
+    @Test(name = "(init) A private member is set through its setter.")
+    public initPrivateUsesSetter() {
+        t = new initTarget() := { "hidden": 5, "pub": 7 };
+        if (t.pub != 7) { return test.fail("pub: " + t.pub); }
+        return test.expect(t.getHidden(), 105);
+    }
+
+    @Test(name = "(init) A private member with no setter is not found, even from inside the class.")
+    public initPrivateNoSetter() {
+        t = new initTarget();
+        id = ""; txt = "";
+        try { t.initSelf(); } catch (e) { id = e.getId(); txt = e.getText(); }
+        if (t.getOwn() != 3) { return test.fail("own was set"); }
+        if (id != "INIT_VAL_NOT_FOUND") { return test.fail("id: " + id); }
+        return test.expect(txt, "astExpression.init(): The provided init value 'own' not found in object 'initTarget'.");
+    }
+
+    @Test(name = "(init) A key with no member or setter is not found.")
+    public initUnknownKey() {
+        txt = "";
+        try { t = new initTarget() := { "nope": 1 }; } catch (e) { txt = e.getId() + ": " + e.getText(); }
+        return test.expect(txt, "INIT_VAL_NOT_FOUND: astExpression.init(): The provided init value 'nope' not found in object 'initTarget'.");
+    }
+
+    @Test(name = "(init) A key shorter than two characters is not found.")
+    public initShortKey() {
+        txt = "";
+        try { m = {}; m := { "a": 1 }; } catch (e) { txt = e.getId() + ": " + e.getText(); }
+        return test.expect(txt, "INIT_VAL_NOT_FOUND: astExpression.init(): The provided init value 'a' not found in object 'map'.");
+    }
+
+    @Test(name = "(init) A right side that is not a map is not possible.")
+    public initRightNotMap() {
+        txt = "";
+        try { t = new initTarget(); t := 5; } catch (e) { txt = e.getId() + ": " + e.getText(); }
+        return test.expect(txt, "INIT_NOT_POSSIBLE: astExpression.init(): Right side of init expression returned invalid type 'cObject', expecting 'map'.");
+    }
+}
+
+class cConcurrentTests {
+
+    // AtomicLong and LongAdder wrap on overflow in Java.
+    @Test(name = "(concurrent) AtomicLong and Counter wrap at max int")
+    public atomicLongWraps() {
+        a = new AtomicLong(9223372036854775807);
+        test.expect(a.incrementAndGet(), -9223372036854775807 - 1);
+        cnt = new Counter();
+        cnt.add(9223372036854775807);
+        cnt.add(5);
+        return test.expect(cnt.sum(), -9223372036854775804);
+    }
+}

@@ -1,0 +1,8 @@
+# Everything the build produces: the binary, the library, objects and
+# generated sources, and each cross build under build/<target>/.
+/build
+/.idea
+
+# third_party is source only, and all of it is committed: the vendored
+# libraries and the time zone data. Nothing there is generated, so nothing
+# there is ignored.

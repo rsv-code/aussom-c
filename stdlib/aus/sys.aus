@@ -1,0 +1,169 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * This static class provides a variety of system
+ * functions.
+ */
+static extern class sys : com.aussom.stdlib.ASys {
+    /**
+     * Gets all of the system information in a single string.
+     * @r A string with all the system info.
+     */
+	public extern getSysInfo();
+
+	/**
+     * Gets the name and path to the Aussom assembly.
+     * @r A string with the result.
+     */
+	public extern getAssembly();
+
+	/**
+     * Gets the path of the Aussom assembly.
+     * @r A string with the result.
+     */
+	public extern getAssemblyPath();
+
+	/**
+     * Gets the current path.
+     * @r A string with the result.
+     */
+	public extern getCurrentPath();
+
+	//public extern getMainFilePath();
+
+	/**
+     * Get the home path.
+     * @r A string with the result.
+     */
+	public extern getHomePath();
+
+	/**
+     * Gets the current user name.
+     * @r A string with the result.
+     */
+	public extern getUserName();
+
+	/**
+     * Gets the operating system arch.
+     * @r A string with the result.
+     */
+	public extern getOsArch();
+
+	/**
+     * Gets the operating system name.
+     * @r A string with the result.
+     */
+	public extern getOsName();
+
+	/**
+     * Gets the operating system version.
+     * @r A string with the result.
+     */
+	public extern getOsVersion();
+
+	/**
+     * Gets the Java version.
+     * @r A string with the result.
+     */
+	public extern getJavaVersion();
+
+	/**
+     * Gets the Java vendor.
+     * @r A string with the result.
+     */
+	public extern getJavaVendor();
+
+	/**
+     * Get the Java vendor URL.
+     * @r A string with the result.
+     */
+	public extern getJavaVendorUrl();
+
+	/**
+     * Gets the Java class path.
+     * @r A string with the result.
+     */
+	public extern getJavaClassPath();
+
+	/**
+     * Gets the system file separator.
+     * @r A string with the result.
+     */
+	public extern getFileSeparator();
+
+	/**
+     * Gets the system line separator.
+     * @r A string with the result.
+     */
+	public extern getLineSeparator();
+
+	/**
+     * Gets the Aussom version.
+     * @r A string with the result.
+     */
+	public extern getAussomVersion();
+
+	/**
+     * Gets the Java home value.
+     * @r A string with the result.
+     */
+	public extern getJavaHome();
+
+	/**
+     * Gets the current time in milliseconds since epoch.
+     * @r An int with the number of milliseconds.
+     */
+	public extern getMills();
+
+	/**
+     * Pauses the running program for the number of
+     * milliseconds provided.
+     *
+     * The wait is broken into short slices rather than one
+     * long wait, which is what lets the host stay in control
+     * of a sleeping program. Three things follow from that:
+     *
+     * If the host cancels the program while it is sleeping,
+     * the sleep ends and an execution cancelled exception is
+     * raised. It is not catchable, because stopping is the
+     * host's decision.
+     *
+     * If the host pauses the program while it is sleeping,
+     * the sleep is suspended: the time remaining stops
+     * counting down until the program is resumed. So the
+     * program still gets the full sleep it asked for, and
+     * simply finishes later than the clock on the wall would
+     * suggest. A blocking call with its own timeout, such as
+     * Latch.await(), behaves the other way: its timeout keeps
+     * running while the program is paused.
+     *
+     * How long a slice is comes from the security manager,
+     * under aussom.limit.sleep.slice, because it is a
+     * control setting and those live with the rest of the
+     * policy. The default is 50 milliseconds, which is the
+     * longest a cancel or pause waits to take effect.
+     * Setting it to 0 turns slicing off and restores a
+     * single wait that nothing can interrupt.
+     *
+     * A negative number of milliseconds raises an exception
+     * rather than failing inside the runtime.
+     *
+     * @p mills is an int with the number of milliseconds to wait.
+     * @r this object
+     */
+	public extern sleep(int mills);
+}

@@ -1,0 +1,215 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * The static base64 class provides functions for base64
+ * encoding and decoding.
+ */
+static extern class base64 : com.aussom.stdlib.ABase64 {
+    /**
+     * Encodes a string to a standard base64 string. The string is
+     * read as UTF-8 bytes. This is the everyday string path.
+     * @p Str is the string to encode.
+     * @r A base64 encoded string.
+     */
+	public extern encode(string Str);
+
+	/**
+	 * Decodes a standard base64 string back to a string, reading the
+	 * decoded bytes as UTF-8. Use this when the base64 represents text;
+	 * use decodeBinary for arbitrary bytes.
+	 * @p B64EncodedString is a base64 encoded string.
+	 * @r The decoded string.
+	 */
+	public extern decode(string B64EncodedString);
+
+	/**
+	 * Encodes a binary Buffer object to a standard base64 string.
+	 * @p BufferObj is the binary Buffer object to encode.
+	 * @r A base64 encoded string.
+	 */
+	public extern encodeBinary(object BufferObj);
+
+	/**
+	 * Decodes a standard base64 string to a binary Buffer object.
+	 * @p B64EncodedString is a base64 encoded string.
+	 * @r A binary Buffer object with the decoded bytes.
+	 */
+	public extern decodeBinary(string B64EncodedString);
+
+	/**
+	 * Encodes a string to a safe encoded string. The output uses only
+	 * the characters 0-9 and a-f (hex of base64), so it needs no
+	 * escaping in URLs, filenames, headers, or other text. The string
+	 * is read as UTF-8 bytes.
+	 * @p Str is the string to encode.
+	 * @r A safe encoded string.
+	 */
+	public extern encodeSafe(string Str);
+
+	/**
+	 * Decodes a safe encoded string (see encodeSafe) back to a string,
+	 * reading the decoded bytes as UTF-8.
+	 * @p SafeEncodedString is a safe encoded string.
+	 * @r The decoded string.
+	 */
+	public extern decodeSafe(string SafeEncodedString);
+}
+
+/**
+ * The static hex class provides functions for hex
+ * encoding and decoding.
+ */
+static extern class hex : com.aussom.stdlib.AHex
+{
+    /**
+     * Converts binary Buffer object to hex string.
+     * @p BufferObj is a binary Buffer object to convert.
+     * @r A hex encoded string.
+     */
+	public extern encode(object BufferObj);
+
+	/**
+	 * Converts hex string to binary Buffer object.
+	 * @p HexEncodedString is a string to encode.
+	 * @r A binary Buffer object with the decoded value.
+	 */
+	public extern decode(string HexEncodedString);
+}
+
+/**
+ * The static uuid class provides universal ID
+ * creation functionality.
+ */
+static extern class uuid : com.aussom.stdlib.AUuid
+{
+    /**
+     * Standard globally unique id.
+     * @r A string with the generated UUID.
+     */
+	public extern get();
+
+	/**
+	 * Generates a globally unique id.
+     * Uses SHA-1 to reduce predictability.
+     * @r A string with the generated UUID.
+     */
+	public extern getSecure();
+}
+
+/**
+ * The static regex class provides various regular
+ * expression functionality. Aussom uses Perl-compatible
+ * regular expressions, which match Java's syntax closely.
+ *
+ * A match runs inside the regular expression runtime,
+ * which matches the string directly. A host stays in
+ * control of a match in the three ways below.
+ *
+ * A host may set a step budget for regular expressions
+ * through the security property aussom.limit.regex.steps.
+ * The engine raises a REGEX_BUDGET_EXCEEDED exception once
+ * a match runs past that budget. A pattern that trips it is
+ * one whose cost has run away, usually a nested quantifier
+ * or a backreference that makes the engine try an enormous
+ * number of combinations. Such a pattern can otherwise run
+ * for minutes on a subject of thirty characters. The regex
+ * engine also carries a built-in limit, so a runaway
+ * pattern is refused even when no budget is configured.
+ *
+ * A host may cancel the program between matches of a
+ * global operation such as match() and replace(). The
+ * operation is abandoned and an execution cancelled
+ * exception is raised, which a script cannot catch.
+ *
+ * A host may pause the program between matches of a
+ * global operation in the same way. The operation goes on
+ * from where it stopped when the program is resumed.
+ *
+ * A single match runs to completion or to the budget; the
+ * budget is what bounds it, so set one when untrusted
+ * patterns are in play.
+ */
+static extern class regex : com.aussom.stdlib.ARegex
+{
+	/**
+	 * Returns a list of string matches.
+	 *
+	 * Raises REGEX_BUDGET_EXCEEDED if the pattern runs past
+	 * the engine's step budget or its built-in limit. See the
+	 * notes on this class.
+	 *
+	 * @p RegexStr is a string with the regular expression.
+	 * @p Haystack is a string to search.
+	 * @r A list of strings with the match results.
+	 */
+	public extern match(string RegexStr, string Haystack);
+
+	/**
+	 * Returns a string with the match,
+	 * or null if no matches found.
+	 * @p RegexStr is a string with the regular expression.
+	 * @p Haysack is a string to search.
+	 * @r A string with the first match if found or null if not.
+	 */
+	public matchFirst(string RegexStr, string Haystack) {
+		matches = regex.match(RegexStr, Haystack);
+		if(#matches > 0) { return matches[0]; }
+		else { return null; }
+	}
+
+	/**
+	 * Returns a string with the match,
+	 * or null if no matches found.
+	 * @p RegexStr is a string with the regular expression.
+	 * @p Haysack is a string to search.
+	 * @r A string with the last match if found or null if not.
+	 */
+	public matchLast(string RegexStr, string Haystack) {
+		matches = regex.match(RegexStr, Haystack);
+		count = #matches;
+		if(#matches > 0) { return matches[(count - 1)]; }
+		else { return null; }
+	}
+
+	/**
+	 * Replaces all occurrences with replacement string.
+	 *
+	 * Raises REGEX_BUDGET_EXCEEDED if the pattern runs past
+	 * the engine's step budget or its built-in limit. See the
+	 * notes on this class.
+	 *
+	 * @p RegexStr is a string with the regular expression.
+	 * @p ReplaceStr is a string with the value to replace.
+	 * @p Haysack is a string to search.
+	 * @r A string that's been replaced.
+	 */
+	public extern replace(string RegexStr, string ReplaceStr, string Haystack);
+
+	/**
+	 * Replaces first occurrence with replacement string.
+	 *
+	 * Raises REGEX_BUDGET_EXCEEDED if the pattern runs past
+	 * the engine's step budget or its built-in limit. See the
+	 * notes on this class.
+	 *
+	 * @p RegexStr is a string with the regular expression.
+	 * @p ReplaceStr is a string with the value to replace.
+	 * @p Haysack is a string to search.
+	 * @r A string that's been replaced.
+	 */
+	public extern replaceFirst(string RegexStr, string ReplaceStr, string Haystack);
+}

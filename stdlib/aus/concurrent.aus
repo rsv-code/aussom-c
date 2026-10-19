@@ -1,0 +1,407 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * Concurrency primitives for shared state. Aussom itself does not
+ * create threads, but its hosts do: Aussom Server evaluates one
+ * shared app instance from many threads at once, and the CLI runs
+ * threads through the thread library. Script-level compound
+ * operations on shared members are not atomic (this.count += 1 is
+ * a separate read, compute, and write), so these classes provide
+ * the atomic building blocks.
+ *
+ * The one rule that applies to every class in this file:
+ * EACH METHOD CALL IS ATOMIC. A SEQUENCE OF METHOD CALLS IS NOT.
+ * Always look for the single method that does the compound
+ * operation in one call (incrementAndGet, compareAndSet,
+ * putIfAbsent-style helpers) rather than composing calls.
+ */
+
+/**
+ * Atomic 64-bit integer. The workhorse for IDs and low-contention
+ * counters. For metrics counters hammered by many writer threads,
+ * prefer Counter. Each method call is atomic; a sequence of method
+ * calls is not.
+ */
+extern class AtomicLong : com.aussom.stdlib.AAtomicLong {
+	/**
+	 * Creates a new AtomicLong.
+	 * @p Initial is an optional int with the starting value. Default 0.
+	 * @r A new AtomicLong object.
+	 */
+	public AtomicLong(int Initial = 0) {
+		return this.newAtomicLong(Initial);
+	}
+	public extern newAtomicLong(int Initial = 0);
+
+	/**
+	 * Gets the current value.
+	 * @r An int with the current value.
+	 */
+	public extern get();
+
+	/**
+	 * Sets the value.
+	 * @p Value is an int with the value to set.
+	 * @r this object
+	 */
+	public extern set(int Value);
+
+	/**
+	 * Atomically adds one and returns the result.
+	 * @r An int with the updated value.
+	 */
+	public extern incrementAndGet();
+
+	/**
+	 * Atomically subtracts one and returns the result.
+	 * @r An int with the updated value.
+	 */
+	public extern decrementAndGet();
+
+	/**
+	 * Atomically adds Delta and returns the result.
+	 * @p Delta is an int with the amount to add (may be negative).
+	 * @r An int with the updated value.
+	 */
+	public extern addAndGet(int Delta);
+
+	/**
+	 * Atomically sets Value and returns the previous value.
+	 * @p Value is an int with the value to set.
+	 * @r An int with the previous value.
+	 */
+	public extern getAndSet(int Value);
+
+	/**
+	 * Atomically sets Update only if the current value equals
+	 * Expect.
+	 * @p Expect is an int with the expected current value.
+	 * @p Update is an int with the new value.
+	 * @r A bool with true when the swap happened.
+	 */
+	public extern compareAndSet(int Expect, int Update);
+}
+
+/**
+ * Atomic boolean. The main use is the one-shot guard: many threads
+ * race compareAndSet(false, true) and exactly one wins. Each method
+ * call is atomic; a sequence of method calls is not.
+ */
+extern class AtomicBool : com.aussom.stdlib.AAtomicBool {
+	/**
+	 * Creates a new AtomicBool.
+	 * @p Initial is an optional bool with the starting value. Default false.
+	 * @r A new AtomicBool object.
+	 */
+	public AtomicBool(bool Initial = false) {
+		return this.newAtomicBool(Initial);
+	}
+	public extern newAtomicBool(bool Initial = false);
+
+	/**
+	 * Gets the current value.
+	 * @r A bool with the current value.
+	 */
+	public extern get();
+
+	/**
+	 * Sets the value.
+	 * @p Value is a bool with the value to set.
+	 * @r this object
+	 */
+	public extern set(bool Value);
+
+	/**
+	 * Atomically sets Value and returns the previous value.
+	 * @p Value is a bool with the value to set.
+	 * @r A bool with the previous value.
+	 */
+	public extern getAndSet(bool Value);
+
+	/**
+	 * Atomically sets Update only if the current value equals
+	 * Expect. Exactly one of several racing callers wins.
+	 * @p Expect is a bool with the expected current value.
+	 * @p Update is a bool with the new value.
+	 * @r A bool with true when the swap happened.
+	 */
+	public extern compareAndSet(bool Expect, bool Update);
+}
+
+/**
+ * Atomic reference holding any Aussom value. The use case is
+ * whole-value publication: build a new map or list, then set() it
+ * in one step so readers see the old value or the new one, never a
+ * mix. Each method call is atomic; a sequence of method calls is
+ * not.
+ */
+extern class AtomicRef : com.aussom.stdlib.AAtomicRef {
+	/**
+	 * Creates a new AtomicRef.
+	 * @p Initial is an optional starting value. Default null.
+	 * @r A new AtomicRef object.
+	 */
+	public AtomicRef(Initial = null) {
+		return this.newAtomicRef(Initial);
+	}
+	public extern newAtomicRef(Initial = null);
+
+	/**
+	 * Gets the current value.
+	 * @r The current value, or null when unset.
+	 */
+	public extern get();
+
+	/**
+	 * Sets the value.
+	 * @p Value is the value to store.
+	 * @r this object
+	 */
+	public extern set(Value);
+
+	/**
+	 * Atomically sets Value and returns the previous value.
+	 * @p Value is the value to store.
+	 * @r The previous value.
+	 */
+	public extern getAndSet(Value);
+
+	/**
+	 * Atomically sets Update only if the current value IS Expect.
+	 * Matches by reference identity (the same underlying object),
+	 * except null matches null.
+	 * @p Expect is the expected current value.
+	 * @p Update is the new value.
+	 * @r A bool with true when the swap happened.
+	 */
+	public extern compareAndSet(Expect, Update);
+}
+
+/**
+ * Striped counter built for write contention. Where AtomicLong
+ * retries when many threads hammer it, Counter stripes writes
+ * across cells and sums on read. The default choice for metrics
+ * and hit counters. Trade-offs: no compareAndSet, and sum() is not
+ * a point-in-time snapshot while writers are active. Each method
+ * call is atomic; a sequence of method calls is not.
+ */
+extern class Counter : com.aussom.stdlib.ACounter {
+	/**
+	 * Adds one.
+	 * @r this object
+	 */
+	public extern increment();
+
+	/**
+	 * Subtracts one.
+	 * @r this object
+	 */
+	public extern decrement();
+
+	/**
+	 * Adds Delta.
+	 * @p Delta is an int with the amount to add (may be negative).
+	 * @r this object
+	 */
+	public extern add(int Delta);
+
+	/**
+	 * Returns the current total.
+	 * @r An int with the sum.
+	 */
+	public extern sum();
+
+	/**
+	 * Resets the total to zero. Only reliable when no other thread
+	 * is writing.
+	 * @r this object
+	 */
+	public extern reset();
+}
+
+/**
+ * Thread-safe FIFO queue with optional capacity and blocking
+ * operations. The bridge between threads: many producers offer()
+ * work items and one dedicated worker take()s them, owning any
+ * non-thread-safe resources. A bounded queue gives backpressure.
+ * Values cross threads safely through the queue; treat a handed-off
+ * mutable value as given away. null cannot be queued because null
+ * is poll()'s empty return. take() and put() block the calling
+ * thread, so request handlers should prefer offer()/poll() with
+ * timeouts and leave indefinite blocking to dedicated threads.
+ */
+extern class BlockingQueue : com.aussom.stdlib.ABlockingQueue {
+	/**
+	 * Creates a new BlockingQueue.
+	 * @p Capacity is an optional int with the maximum number of
+	 * queued values. Default 0 for unbounded.
+	 * @r A new BlockingQueue object.
+	 */
+	public BlockingQueue(int Capacity = 0) {
+		return this.newBlockingQueue(Capacity);
+	}
+	public extern newBlockingQueue(int Capacity = 0);
+
+	/**
+	 * Adds a value, waiting up to TimeoutMs for space.
+	 * @p Value is the value to queue. null is rejected.
+	 * @p TimeoutMs is an optional int with how long to wait for
+	 * space in milliseconds. Default 0 for no waiting.
+	 * @r A bool with true when the value was queued.
+	 */
+	public extern offer(Value, int TimeoutMs = 0);
+
+	/**
+	 * Removes and returns the head value, waiting up to TimeoutMs
+	 * for one to arrive.
+	 * @p TimeoutMs is an optional int with how long to wait in
+	 * milliseconds. Default 0 for no waiting.
+	 * @r The head value, or null when none arrived in time.
+	 */
+	public extern poll(int TimeoutMs = 0);
+
+	/**
+	 * Adds a value, blocking until space is available. Meant for
+	 * dedicated worker threads, not request handlers.
+	 * @p Value is the value to queue. null is rejected.
+	 * @r this object
+	 */
+	public extern put(Value);
+
+	/**
+	 * Removes and returns the head value, blocking until one is
+	 * available. Meant for dedicated worker threads, not request
+	 * handlers.
+	 * @r The head value.
+	 */
+	public extern take();
+
+	/**
+	 * Gets the number of queued values.
+	 * @r An int with the size.
+	 */
+	public extern size();
+
+	/**
+	 * Removes all queued values.
+	 * @r this object
+	 */
+	public extern clear();
+}
+
+/**
+ * Counting semaphore for throttling: at most N concurrent holders
+ * of a resource. There is deliberately no timeout-free acquire so a
+ * script cannot park a host worker thread forever; tryAcquire(0) is
+ * the non-blocking form. Each method call is atomic; a sequence of
+ * method calls is not.
+ */
+extern class Semaphore : com.aussom.stdlib.ASemaphore {
+	/**
+	 * Creates a new Semaphore.
+	 * @p Permits is an optional int with the number of permits.
+	 * Default 1, which acts as a simple mutex.
+	 * @r A new Semaphore object.
+	 */
+	public Semaphore(int Permits = 1) {
+		return this.newSemaphore(Permits);
+	}
+	public extern newSemaphore(int Permits = 1);
+
+	/**
+	 * Tries to take a permit, waiting up to TimeoutMs.
+	 * @p TimeoutMs is an optional int with how long to wait in
+	 * milliseconds. Default 0 for no waiting.
+	 * @r A bool with true when a permit was acquired.
+	 */
+	public extern tryAcquire(int TimeoutMs = 0);
+
+	/**
+	 * Returns a permit. Call once per successful tryAcquire.
+	 * @r this object
+	 */
+	public extern release();
+
+	/**
+	 * Gets the number of available permits.
+	 * @r An int with the available permits.
+	 */
+	public extern availablePermits();
+}
+
+/**
+ * One-shot countdown gate. One thread waits until N events have
+ * happened: N workers finished, N messages arrived. The count
+ * cannot be reset; create a new Latch for a new round. await always
+ * takes a timeout so a script cannot park a host worker thread
+ * forever.
+ */
+extern class Latch : com.aussom.stdlib.ALatch {
+	/**
+	 * Creates a new Latch.
+	 * @p Count is an optional int with the number of countDown
+	 * calls that release waiters. Default 1, a one-shot gate.
+	 * @r A new Latch object.
+	 */
+	public Latch(int Count = 1) {
+		return this.newLatch(Count);
+	}
+	public extern newLatch(int Count = 1);
+
+	/**
+	 * Counts down by one. At zero all waiters are released.
+	 * @r this object
+	 */
+	public extern countDown();
+
+	/**
+	 * Waits until the count reaches zero or the timeout passes.
+	 * @p TimeoutMs is an int with how long to wait in milliseconds.
+	 * @r A bool with true when the count reached zero in time.
+	 */
+	public extern await(int TimeoutMs);
+
+	/**
+	 * Gets the remaining count.
+	 * @r An int with the remaining count.
+	 */
+	public extern getCount();
+}
+
+/**
+ * Scoped mutual exclusion. The escape hatch for multi-step updates
+ * that no single atomic method covers. There is deliberately no
+ * separate lock()/unlock() pair: a script exception between the two
+ * would leak the lock forever, so the only way to hold the lock is
+ * withLock, where acquire, run, and guaranteed release happen
+ * inside one call. Prefer the atomic classes above when one of them
+ * fits; two locks taken in different orders by different threads
+ * can still deadlock (the wait timeout turns that into a visible
+ * error instead of a frozen thread).
+ */
+extern class Lock : com.aussom.stdlib.ALock {
+	/**
+	 * Runs Cb while holding the lock and returns its return value.
+	 * The lock is released when Cb finishes or throws. Reentrant:
+	 * Cb may call withLock on the same Lock again.
+	 * @p Cb is a callback taking no arguments.
+	 * @p WaitMs is an optional int with how long to wait for the
+	 * lock in milliseconds before throwing. Default 30000.
+	 * @r The callback's return value.
+	 */
+	public extern withLock(callback Cb, int WaitMs = 30000);
+}

@@ -1,0 +1,313 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * The static math class provides all sorts of mathematical
+ * functions.
+ */
+static extern class math : com.aussom.stdlib.AMath {
+    /**
+     * Returns e, the base of natural logarithms.
+     * @r A double with the e value.
+     */
+	public extern e();
+
+	/**
+     * Gets the value of pi.
+     * @r A double with the value of pi.
+     */
+	public extern pi();
+
+	/**
+     * Gets the absolute value of the provided value. Acceptable
+     * types are bool, int, and double.
+     * @p Val is a value to take the absolute value of.
+     * @r An int with the absolute value.
+     */
+	public extern abs(Val);
+
+	/**
+     * Arc cosine value for the provided value.
+     * @p AdjOverHypot is a double with the values.
+     * @r A double with the angle value.
+     */
+	public extern acos(double AdjOverHypot);
+
+	/**
+     * Arc sine value for the provided value.
+     * @p OppOverHypot is a double with the values.
+     * @r A double with the angle value.
+     */
+	public extern asin(double OppOverHypot);
+
+	/**
+	 * Arc tan value for the provided value.
+     * @p OppOverAdj is a double with the values.
+     * @r A double with the angle value.
+     */
+	public extern atan(double OppOverAdj);
+
+	/**
+     * Cubed root function.
+     * @p Val is a double with the value to
+     * take the cubed root of.
+     * @r A double with the result.
+     */
+	public extern cbrt(double Val);
+
+	/**
+     * Ceiling function returns the smallest double value
+     * greater than or equal to the provided value that
+     * is a mathematical integer.
+     */
+	public extern ceil(double Val);
+
+	/**
+     * Returns the first double argument with the sign of
+     * the second double argument.
+     * @p Magnitude is a double with the value.
+     * @p Sign is a double with the sign.
+     * @r A double with the value.
+     */
+	public extern copySign(double Magnitude, double Sign);
+
+	/**
+     * The cosine function.
+     * @p AngleRad is a double with the angle.
+     * @r The cosine of the argument.
+     */
+	public extern cos(double AngleRad);
+
+	/**
+     * The hyperbolic cosine of a double value.
+     * @p AngleRad is a double with the angle in radians.
+     * @r A double with hyperbolic cosine of the angle.
+     */
+	public extern cosh(double AngleRad);
+
+	/**
+     * Returns Euler's number e raised
+     * to the power of a double value.
+     * @p Val a double is the exponent to be raised to.
+     * @r A double with the result.
+     */
+	public extern exp(double Val);
+
+	/**
+     * Returns (e^x)-1.
+     * @p Val is a double with the value of x.
+     * @r A double with the result.
+     */
+	public extern expm1(double Val);
+
+	/**
+     * Returns the largest double value that is less than
+     * or equal to the provided value that is an integer.
+     * @p Val is a double with the value to check.
+     * @r A double with the floor value.
+     */
+	public extern floor(double Val);
+
+	/**
+     * Returns the unbiased exponent used
+     * in the representation of a double.
+     * @p Val is a double to get the exponent of.
+     * @r A double with the result.
+     */
+	public extern getExponent(double Val);
+
+	/**
+     * Returns sqrt(x^2 + y^2) without intermediate
+     * overflow or underflow.
+     * @p X is a double with the x value.
+     * @p Y is a double with the y value.
+     * @r A double with the result.
+     */
+	public extern hypot(double X, double Y);
+
+	/**
+     * Computes the remainder operation on two
+     * arguments by the IEEE 754 standard.
+     * @p Double1 is a double with the dividend.
+     * @p Double2 is a double with the divisor.
+     * @r A double with the remainder.
+     */
+	public extern IEEEremainder(double Double1, double Double2);
+
+	/**
+     * Returns the natural logarithm (base e)
+     * of the provided double value.
+     * @p Val is a double to take the natural log of.
+     * @r A double with the result.
+     */
+	public extern log(double Val);
+
+	/**
+     * Returns the log base 10 of the provided
+     * value.
+     * @p Val is a double with the value to take
+     * the log value.
+     * @r A double with the result.
+     */
+	public extern log10(double Val);
+
+	/**
+     * Returns the natural logarithm of the sum
+     * of the argument and 1.
+     * @p Val is a double with the argument.
+     * @r A double with the result.
+     */
+	public extern log1p(double Val);
+
+	/**
+     * Returns the greater of the two provided values.
+     * @p Val1 is a double with a value to compare.
+     * @p Val2 is a double with a value to compare.
+     * @r A double with the greater of the two.
+     */
+	public extern max(Val1, Val2);
+
+	/**
+     * Returns the smaller of the two provided values.
+     * @p Val1 is a double with a value to compare.
+     * @p Val2 is a double with a value to compare.
+     * @r A double with the smaller of the two.
+     */
+	public extern min(Val1, Val2);
+
+	/**
+     * Returns the double number adjacent to the first number
+     * in the direction of the second double argument.
+     * @p Double1 is a double with the first value.
+     * @p Double2 is a double with the second value.
+     * @r A double with the result.
+     */
+	public extern nextAfter(double Double1, double Double2);
+
+	/**
+     * Returns the double value adjacent to
+     * the value in the direction of positive infinity.
+     * @p Val is a double with the value to get.
+     * @r A double with the adjacent value.
+     */
+	public extern nextUp(double Val);
+
+	/**
+     * Returns the value of the first argument to the
+     * power of the second argument.
+     * @p Double1 is a double with the base number.
+     * @p Double2 is a double with the exponent.
+     * @r A double with the value.
+     */
+	public extern pow(double Double1, double Double2);
+
+	/**
+     * Returns a random double between 0 and 1.0.
+     * @r A double with the random value.
+     */
+	public extern rand();
+
+	/**
+     * Returns the double value that is closest in value to the
+     * provided value and is equal to an integer.
+     * @p Val is a value to check.
+     * @r A doubel with the return value.
+     */
+	public extern rint(double Val);
+
+	/**
+     * Rounds to the closest long.
+     * @p Val is a double with the value to round.
+     * @r A double with the result.
+     */
+	public extern round(double Val);
+
+	/**
+     * Returns d * 2^scaleFactor rounded as if performed by a single
+     * correctly rounded floating-point multiply to a member of the
+     * double value set.
+     * @p DoubleVal is a double with the d value.
+     * @p IntVal is an int with the power.
+     * @r An double with the value.
+     */
+	public extern scalb(double DoubleVal, int IntVal);
+
+	/**
+     * Returns the signum function of the argument.
+     * Returns 0 if the argument is 0, 1.0 if the argument
+     * is greater than 0, and -1.0 if the argument is less
+     * than 0.
+     * @p Val is a double with the argument.
+     * @r A double with the result.
+     */
+	public extern signum(double Val);
+
+	/**
+     * Gets the trig sine function.
+     * @p Val is the value of the function.
+     * @r A double with the result.
+     */
+	public extern sin(double Val);
+
+	/**
+     * Returns the hyperbolic sine of the value.
+     * @p Val is the value of the function.
+     * @r A double with the result.
+     */
+	public extern sinh(double Val);
+
+	/**
+     * Returns the square root of the value.
+     * @p Val is the value of the function.
+     * @r A double with the result.
+     */
+	public extern sqrt(double Val);
+
+	/**
+     * Gets the trig tangent function.
+     * @p Val is the value of the function.
+     * @r A double with the result.
+     */
+	public extern tan(double Val);
+
+	/**
+     * Returns the hyperbolic tangent of the value.
+     * @p Val is the value of the function.
+     * @r A double with the result.
+     */
+	public extern tanh(double Val);
+
+	/**
+     * Converts radians to degrees.
+     * @p Val is a double with the radians.
+     * @r A double with the degrees.
+     */
+	public extern toDeg(double Val);
+
+	/**
+     * Converts degrees to radians.
+     * @p Val is a double with the degrees.
+     * @r A double with the radians.
+     */
+	public extern toRad(double Val);
+
+	/**
+     * Returns the size of an ulp of the argument.
+     * @p Val is the argument.
+     * @r A double with the result.
+     */
+	public extern ulp(double Val);
+}

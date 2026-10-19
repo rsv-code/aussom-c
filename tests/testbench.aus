@@ -1,0 +1,200 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Aussom interpreter performance test bench. Seven micro-benchmarks
+// each targeting a single code path. Run from the CLI:
+//
+//   java -jar target/aussom.base-1.1.16-jar-with-dependencies.jar tests/testbench.aus
+//
+// Output is one line per benchmark with elapsed milliseconds, plus
+// a final TOTAL line.
+
+include sys;
+
+class bAdder {
+    public x = 0;
+    public bAdder() { this.x = 0; }
+    public bump(int n) { this.x = this.x + n; return this.x; }
+}
+
+class bPoint {
+    public x = 0;
+    public y = 0;
+    public bPoint() { this.x = 0; this.y = 0; }
+}
+
+class bContainer {
+    public p = null;
+    public lst = [];
+    public mp = {};
+    public bContainer() {
+        this.p = new bPoint();
+        this.lst = [0, 0, 0];
+        this.mp = {"a": 0, "b": 0, "c": 0};
+    }
+}
+
+class testbench {
+    // Wall-clock helper. Returns elapsed milliseconds since the
+    // provided start mark.
+    public elapsed(int start) { return sys.getMills() - start; }
+
+    public report(string name, int start) {
+        ms = this.elapsed(start);
+        c.println("  " + name + ": " + ms + " ms");
+        return ms;
+    }
+
+    /***********************************************************************
+     * 01 - Arithmetic loop. Tight numeric loop. Stresses the AST eval
+     * path for binary arithmetic, comparison, and the C-style for. No
+     * allocations in the loop body, so cost is dispatch overhead.
+     *********************************************************************/
+    public bench01_arithLoop() {
+        start = sys.getMills();
+        n = 1000000;
+        sum = 0;
+        for (i = 0; i < n; i = i + 1) {
+            sum = sum + i;
+        }
+        return this.report("01-arith-loop      [sum=" + sum + "]", start);
+    }
+
+    /***********************************************************************
+     * 02 - Method dispatch. Two method calls per iteration through the
+     * astClass dispatch + overload resolution.
+     *********************************************************************/
+    public bench02_methodDispatch() {
+        start = sys.getMills();
+        a = new bAdder();
+        b = new bAdder();
+        n = 200000;
+        for (i = 0; i < n; i = i + 1) {
+            a.bump(1);
+            b.bump(2);
+        }
+        return this.report("02-method-dispatch [a.x=" + a.x + " b.x=" + b.x + "]", start);
+    }
+
+    /***********************************************************************
+     * 03 - List operations. Append, index read, index write.
+     *********************************************************************/
+    public bench03_listOps() {
+        start = sys.getMills();
+        lst = [];
+        n = 50000;
+        for (i = 0; i < n; i = i + 1) {
+            lst @= i;
+        }
+        sum = 0;
+        for (i = 0; i < n; i = i + 1) {
+            sum = sum + lst[i];
+        }
+        for (i = 0; i < n; i = i + 1) {
+            lst[i] = lst[i] + 1;
+        }
+        return this.report("03-list-ops        [sum=" + sum + " last=" + lst[n - 1] + "]", start);
+    }
+
+    /***********************************************************************
+     * 04 - Map operations. Insert, lookup, update with string keys.
+     *********************************************************************/
+    public bench04_mapOps() {
+        start = sys.getMills();
+        mp = {};
+        n = 20000;
+        for (i = 0; i < n; i = i + 1) {
+            mp[i.toString()] = i;
+        }
+        sum = 0;
+        for (i = 0; i < n; i = i + 1) {
+            sum = sum + mp[i.toString()];
+        }
+        for (i = 0; i < n; i = i + 1) {
+            mp[i.toString()] = mp[i.toString()] + 1;
+        }
+        return this.report("04-map-ops         [sum=" + sum + " size=" + #mp + "]", start);
+    }
+
+    /***********************************************************************
+     * 05 - String concat. The `+` operator on strings creates a new
+     * AussomString per step. Worst-case for an interpreter that
+     * doesn't pool strings.
+     *********************************************************************/
+    public bench05_stringConcat() {
+        start = sys.getMills();
+        s = "";
+        n = 5000;
+        for (i = 0; i < n; i = i + 1) {
+            s = s + "x";
+        }
+        return this.report("05-string-concat   [len=" + #s + "]", start);
+    }
+
+    /***********************************************************************
+     * 06 - Deep call. Recursive Fibonacci. CallStack push/pop, argument
+     * marshaling, method dispatch under recursion.
+     *********************************************************************/
+    public fib(int n) {
+        if (n < 2) { return n; }
+        return this.fib(n - 1) + this.fib(n - 2);
+    }
+
+    public bench06_deepCall() {
+        start = sys.getMills();
+        r = this.fib(25);
+        return this.report("06-deep-call       [fib(25)=" + r + "]", start);
+    }
+
+    /***********************************************************************
+     * 07 - Member access. Compound lvalue chains. Stresses
+     * astObj.evalObj after the indexed-assignment rework.
+     *********************************************************************/
+    public bench07_memberAccess() {
+        start = sys.getMills();
+        ct = new bContainer();
+        n = 100000;
+        for (i = 0; i < n; i = i + 1) {
+            ct.p.x = ct.p.x + 1;
+            ct.lst[0] = ct.lst[0] + 1;
+            ct.mp["a"] = ct.mp["a"] + 1;
+        }
+        return this.report("07-member-access   [p.x=" + ct.p.x + " lst[0]=" + ct.lst[0] + " mp[a]=" + ct.mp["a"] + "]", start);
+    }
+
+    public runAll() {
+        c.println("Aussom test bench");
+        c.println("");
+        this.bench01_arithLoop();
+        this.bench02_methodDispatch();
+        this.bench03_listOps();
+        this.bench04_mapOps();
+        this.bench05_stringConcat();
+        this.bench06_deepCall();
+        this.bench07_memberAccess();
+    }
+}
+
+class Main {
+    public main() {
+        start = sys.getMills();
+        tb = new testbench();
+        tb.runAll();
+        elapsed = sys.getMills() - start;
+        c.println("");
+        c.println("TOTAL elapsed: " + elapsed + " ms");
+    }
+}

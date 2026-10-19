@@ -1,0 +1,237 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Date.format and Date.parse pattern tests. The patterns are Java's
+// DateTimeFormatter patterns, printed at UTC in the en_US locale, and
+// every expected value is what the Java implementation (aussom-base)
+// gives. This file passes under both it and aussomc:
+//     ./build/aussomc -t tests/dateFormatTest.aus
+//     java -jar aussom.base-<version>-jar-with-dependencies.jar -t tests/dateFormatTest.aus
+
+include aunit;
+
+@Test(name = "Date Format Tests")
+class dateFormatTests {
+    /***********************************************************************
+     * Helpers
+     *********************************************************************/
+
+    // 2023-11-14T22:13:20.123Z, a Tuesday.
+    public sample() { d = new Date(); d.setTime(1700000000123); return d; }
+
+    // The date at a time in milliseconds, formatted with a pattern.
+    public fmt(int Ms, string Pattern) { d = new Date(); d.setTime(Ms); return d.format(Pattern); }
+
+    // The text parsed with a pattern, as the date's ISO string.
+    public prs(string Text, string Pattern) {
+        d = new Date();
+        d.parse(Text, Pattern);
+        return d.toString();
+    }
+
+    // The text of the exception a call raised.
+    public errText(callback Cb) {
+        try { Cb.call(); } catch (e) { return e.getText(); }
+        return "no exception";
+    }
+
+    /***********************************************************************
+     * Formatting
+     *********************************************************************/
+    @Test(name = "(date format) Names of months, days, quarters and eras.")
+    public formatNames() {
+        d = this.sample();
+        test.expect(d.format("EEEE, MMMM d, uuuu 'at' h:mm a"), "Tuesday, November 14, 2023 at 10:13 PM");
+        test.expect(d.format("EEE MMM dd QQQ QQQQ G GGGG"), "Tue Nov 14 Q4 4th quarter AD Anno Domini");
+        return test.expect(d.format("MMMMM EEEEE GGGGG"), "N T A");
+    }
+
+    @Test(name = "(date format) Week fields start on Sunday.")
+    public formatWeeks() {
+        d = this.sample();
+        test.expect(d.format("YYYY-'W'ww-e c W F D"), "2023-W46-3 3 3 2 318");
+        return test.expect(d.format("uuuu-DDD g"), "2023-318 60262");
+    }
+
+    @Test(name = "(date format) Hours, day periods and fractions.")
+    public formatTime() {
+        d = this.sample();
+        test.expect(d.format("k K B BBBBB"), "22 10 at night at night");
+        return test.expect(d.format("n A N"), "123000000 80000123 80000123000000");
+    }
+
+    @Test(name = "(date format) Offsets and zones print UTC.")
+    public formatZones() {
+        return test.expect(this.sample().format("X XX XXX x xx xxx Z ZZZZ ZZZZZ O OOOO VV z v"),
+            "Z Z Z +00 +0000 +00:00 +0000 GMT Z GMT GMT Z Z Z");
+    }
+
+    @Test(name = "(date format) Optional sections, quotes and padding.")
+    public formatLiterals() {
+        d = this.sample();
+        test.expect(d.format("[yyyy] '''quoted''' 'it''s'"), "2023 'quoted' it's");
+        return test.expect(d.format("ppd|pppMMM|"), "14|Nov|");
+    }
+
+    @Test(name = "(date format) Years before 1 and after 9999.")
+    public formatYears() {
+        test.expect(this.fmt(-62198755200000, "y u yyyy uuuu G"), "2 -1 0002 -0001 BC");
+        return test.expect(this.fmt(253402300800000, "yyyy uuuu yy"), "+10000 +10000 00");
+    }
+
+    @Test(name = "(date format) A bad pattern throws Java's exception.")
+    public formatErrors() {
+        test.expect(this.errText(::badLetters).contains("IllegalArgumentException: Too many pattern letters: d"), true);
+        test.expect(this.errText(::badReserved).contains("Pattern includes reserved character: '#'"), true);
+        test.expect(this.errText(::badUnknown).contains("Unknown pattern letter: b"), true);
+        return test.expect(this.errText(::badPad).contains("Cannot print as output of 2 characters exceeds pad width of 1"), true);
+    }
+    public badLetters() { return this.sample().format("ddd"); }
+    public badReserved() { return this.sample().format("yyyy-MM-dd #"); }
+    public badUnknown() { return this.sample().format("b"); }
+    public badPad() { return this.sample().format("pd"); }
+
+    /***********************************************************************
+     * Parsing
+     *********************************************************************/
+    @Test(name = "(date parse) A day past the end of the month becomes its last day.")
+    public parseSmartDay() {
+        test.expect(this.prs("2024-02-30", "yyyy-MM-dd"), "2024-02-29T00:00:00.000Z");
+        test.expect(this.prs("2023-02-29", "yyyy-MM-dd"), "2023-02-28T00:00:00.000Z");
+        txt = this.errText(::parseDay32);
+        return test.expect(txt.contains("Invalid value for DayOfMonth (valid values 1 - 28/31): 32"), true);
+    }
+    public parseDay32() { return this.prs("2024-02-32", "yyyy-MM-dd"); }
+
+    @Test(name = "(date parse) Adjacent numbers share the digits.")
+    public parseAdjacent() {
+        test.expect(this.prs("20240105123045", "yyyyMMddHHmmss"), "2024-01-05T12:30:45.000Z");
+        txt = this.errText(::parseAdjacentBad);
+        return test.expect(txt, "Date.parse(): Parse exception. (Text '2024015' could not be parsed at index 0)");
+    }
+    public parseAdjacentBad() { return this.prs("2024015", "yyyyMMd"); }
+
+    @Test(name = "(date parse) Optional sections.")
+    public parseOptional() {
+        test.expect(this.prs("2024-01-05", "yyyy-MM-dd['T'HH:mm]"), "2024-01-05T00:00:00.000Z");
+        return test.expect(this.prs("2024-01-05T10:30", "yyyy-MM-dd['T'HH:mm]"), "2024-01-05T10:30:00.000Z");
+    }
+
+    @Test(name = "(date parse) 24:00 is midnight of the next day.")
+    public parseMidnight() { return test.expect(this.prs("2024-01-05 24:00:00", "yyyy-MM-dd HH:mm:ss"), "2024-01-06T00:00:00.000Z"); }
+
+    @Test(name = "(date parse) The time defaults to 0 only when no hour was parsed.")
+    public parseHourAmPm() {
+        test.expect(this.prs("2024-01-05 3:04 PM", "yyyy-MM-dd h:mm a"), "2024-01-05T15:04:00.000Z");
+        test.expect(this.prs("2024-01-05 15 PM", "yyyy-MM-dd HH a"), "2024-01-05T15:00:00.000Z");
+        test.expect(this.prs("2024-01-05 PM", "yyyy-MM-dd a"), "2024-01-05T18:00:00.000Z");
+        return test.expect(this.errText(::parseClockHourOnly).contains("Unable to obtain ZonedDateTime"), true);
+    }
+    public parseClockHourOnly() { return this.prs("2024-01-05 3:04", "yyyy-MM-dd h:mm"); }
+
+    @Test(name = "(date parse) Names must match the pattern's style and the date.")
+    public parseNames() {
+        test.expect(this.errText(::parseWrongDay).contains("Field DayOfWeek 5 differs from DayOfWeek 1 derived from 2024-01-05"), true);
+        return test.expect(this.errText(::parseShortMonth).contains("could not be parsed at index 5"), true);
+    }
+    public parseWrongDay() { return this.prs("2024-01-05 Mon", "yyyy-MM-dd EEE"); }
+    public parseShortMonth() { return this.prs("2024 Jan 5", "yyyy MMMM d"); }
+
+    @Test(name = "(date parse) Offsets move the instant to UTC.")
+    public parseOffsets() {
+        test.expect(this.prs("2024-01-05+05:30", "yyyy-MM-ddXXX"), "2024-01-04T18:30:00.000Z");
+        test.expect(this.prs("2024-01-05 -0800", "yyyy-MM-dd Z"), "2024-01-05T08:00:00.000Z");
+        test.expect(this.prs("2024-01-05 GMT+5", "yyyy-MM-dd O"), "2024-01-04T19:00:00.000Z");
+        test.expect(this.prs("2024-01-05 UTC+05:00", "yyyy-MM-dd VV"), "2024-01-04T19:00:00.000Z");
+        return test.expect(this.errText(::parseOffsetRange).contains("Zone offset not in valid range: -18:00 to +18:00"), true);
+    }
+    public parseOffsetRange() { return this.prs("2024-01-05+19", "yyyy-MM-ddX"); }
+
+    @Test(name = "(date parse) Region IDs use the zone's rules.")
+    public parseRegions() {
+        test.expect(this.prs("2024-07-01 12:00 America/New_York", "yyyy-MM-dd HH:mm VV"), "2024-07-01T16:00:00.000Z");
+        test.expect(this.prs("2024-01-01 12:00 Europe/Paris", "yyyy-MM-dd HH:mm VV"), "2024-01-01T11:00:00.000Z");
+        test.expect(this.prs("1850-01-01 Africa/Algiers", "yyyy-MM-dd VV"), "1849-12-31T23:47:48.000Z");
+        test.expect(this.prs("2300-07-01 America/New_York", "yyyy-MM-dd VV"), "2300-07-01T04:00:00.000Z");
+        // An offset in the text wins over the zone's rules.
+        return test.expect(this.prs("2024-11-03 01:30 -0300 America/Los_Angeles", "yyyy-MM-dd HH:mm Z VV"), "2024-11-03T04:30:00.000Z");
+    }
+
+    @Test(name = "(date parse) A gap moves the time on; an overlap takes the earlier offset.")
+    public parseGapOverlap() {
+        test.expect(this.prs("2024-03-10 02:30 America/Los_Angeles", "yyyy-MM-dd HH:mm VV"), "2024-03-10T10:30:00.000Z");
+        return test.expect(this.prs("2024-11-03 01:30 America/Los_Angeles", "yyyy-MM-dd HH:mm VV"), "2024-11-03T08:30:00.000Z");
+    }
+
+    @Test(name = "(date parse) Zone names, and the offset a name picks in an overlap.")
+    public parseZoneNames() {
+        test.expect(this.prs("2024-07-01 12:00 PST", "yyyy-MM-dd HH:mm z"), "2024-07-01T19:00:00.000Z");
+        test.expect(this.prs("2024-11-03 01:30 Pacific Standard Time", "yyyy-MM-dd HH:mm zzzz"), "2024-11-03T09:30:00.000Z");
+        test.expect(this.prs("2024-11-03 01:30 Pacific Daylight Time", "yyyy-MM-dd HH:mm zzzz"), "2024-11-03T08:30:00.000Z");
+        test.expect(this.prs("2024-11-03 01:30 PT", "yyyy-MM-dd HH:mm v"), "2024-11-03T09:30:00.000Z");
+        // A short pattern does not read long names.
+        return test.expect(this.errText(::parseLongName).contains("could not be parsed at index 17"), true);
+    }
+    public parseLongName() { return this.prs("2024-07-01 12:00 Pacific Standard Time", "yyyy-MM-dd HH:mm z"); }
+
+    @Test(name = "(date parse) Zone IDs are read as java.time reads them.")
+    public parseZoneIds() {
+        test.expect(this.prs("2024-01-15 12:00 Etc/GMT+1x", "yyyy-MM-dd HH:mm VV'x'"), "2024-01-15T13:00:00.000Z");
+        // The reading follows Etc/GMT+ toward Etc/GMT+1 and does not back
+        // up to Etc/GMT.
+        test.expect(this.errText(::parseEtcPlus).contains("could not be parsed at index 17"), true);
+        test.expect(this.errText(::parseLowerCase).contains("could not be parsed at index 17"), true);
+        txt = this.errText(::parseZoneOnly);
+        return test.expect(txt.contains("{Year=2024},ISO,America/Los_Angeles,0 resolved to 00:00"), true);
+    }
+    public parseEtcPlus() { return this.prs("2024-01-15 12:00 Etc/GMT+", "yyyy-MM-dd HH:mm VV"); }
+    public parseLowerCase() { return this.prs("2024-01-15 12:00 america/new_york", "yyyy-MM-dd HH:mm VV"); }
+    public parseZoneOnly() { return this.prs("2024 PST", "yyyy z"); }
+
+    @Test(name = "(date parse) Week, day-of-year and Julian day dates.")
+    public parseOtherDates() {
+        test.expect(this.prs("2024 1 6", "YYYY w e"), "2024-01-05T00:00:00.000Z");
+        test.expect(this.prs("2024-01 2 Fri", "yyyy-MM F EEE"), "2024-01-12T00:00:00.000Z");
+        test.expect(this.prs("2024-060", "yyyy-DDD"), "2024-02-29T00:00:00.000Z");
+        test.expect(this.prs("60314", "g"), "2024-01-05T00:00:00.000Z");
+        return test.expect(this.errText(::parseLeapDay).contains("Invalid date 'DayOfYear 366' as '2023' is not a leap year"), true);
+    }
+    public parseLeapDay() { return this.prs("2023-366", "yyyy-DDD"); }
+
+    @Test(name = "(date parse) Years with an era, and years past 9999.")
+    public parseYears() {
+        test.expect(this.prs("0001-01-05 BC", "yyyy-MM-dd G"), "0001-01-05T00:00:00.000Z");
+        test.expect(this.prs("+12024-01-05", "yyyy-MM-dd"), "+12024-01-05T00:00:00.000Z");
+        return test.expect(this.errText(::parseWideYear).contains("could not be parsed at index 0"), true);
+    }
+    public parseWideYear() { return this.prs("12024-01-05", "yyyy-MM-dd"); }
+
+    @Test(name = "(date parse) The defaults apply outside a section the pattern leaves open.")
+    public parseOpenSection() {
+        test.expect(this.prs("2024-01-05 in the evening", "yyyy-MM-dd B[ HH"), "2024-01-05T19:30:00.000Z");
+        return test.expect(this.prs("2024-01-05", "yyyy-MM-dd[ HH"), "2024-01-05T00:00:00.000Z");
+    }
+
+    @Test(name = "(date parse) Missing fields, extra text and bad patterns.")
+    public parseErrors() {
+        test.expect(this.errText(::parseYearOnly).contains("Unable to obtain ZonedDateTime from TemporalAccessor: {Year=2024}"), true);
+        test.expect(this.errText(::parseExtra), "Date.parse(): Parse exception. (Text '2024-01-05x' could not be parsed, unparsed text found at index 10)");
+        return test.expect(this.errText(::parseBadPattern).contains("IllegalArgumentException: Too many pattern letters: d"), true);
+    }
+    public parseYearOnly() { return this.prs("2024", "yyyy"); }
+    public parseExtra() { return this.prs("2024-01-05x", "yyyy-MM-dd"); }
+    public parseBadPattern() { return this.prs("2024-01-05", "yyyy-MM-ddd"); }
+}

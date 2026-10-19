@@ -1,0 +1,293 @@
+/*
+ * Copyright 2026 Austin Lehman
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Buffer charset conversion tests. Every expected value is what the
+// Java implementation (aussom-base) gives, and this file passes under
+// both it and aussomc:
+//     ./build/aussomc -t tests/bufferCharsetTest.aus
+//     java -jar aussom.base-<version>-jar-with-dependencies.jar -t tests/bufferCharsetTest.aus
+//
+// Decoded text is compared as its UTF-16 code units, in decimal, so a
+// U+FFFD replacement (65533) is easy to see.
+
+include aunit;
+
+@Test(name = "Buffer Charset Tests")
+class bufferCharsetTests {
+    /***********************************************************************
+     * Helpers
+     *********************************************************************/
+
+    // A buffer holding the given byte values.
+    public bytesBuf(list Bytes) {
+        b = new Buffer(#Bytes);
+        for (i = 0; i < #Bytes; i++) { b.setByte(i, Bytes[i]); }
+        return b;
+    }
+
+    // The bytes of a buffer from 0 to Count, as "1,2,3" with values 0-255.
+    public bytesOf(object Buf, int Count) {
+        res = [];
+        for (i = 0; i < Count; i++) {
+            v = Buf.getByte(i);
+            if (v < 0) { v += 256; }
+            res @= "" + v;
+        }
+        return res.join(",");
+    }
+
+    // The UTF-16 code units of a string, as "233,65".
+    public units(string Str) {
+        b = new Buffer(1);
+        n = b.setString(Str, "UTF-16BE");
+        res = [];
+        for (i = 0; i < n; i += 2) {
+            hi = b.getByte(i);
+            lo = b.getByte(i + 1);
+            if (hi < 0) { hi += 256; }
+            if (lo < 0) { lo += 256; }
+            res @= "" + (hi * 256 + lo);
+        }
+        return res.join(",");
+    }
+
+    // Decodes the byte values with the charset, as code units.
+    public dec(string Charset, list Bytes) {
+        return this.units(this.bytesBuf(Bytes).getString(Charset));
+    }
+
+    // Encodes the string with the charset, as byte values.
+    public enc(string Charset, string Str) {
+        b = new Buffer(1);
+        n = b.setString(Str, Charset);
+        return this.bytesOf(b, n);
+    }
+
+    // The text of the exception a call raised.
+    public errText(callback Cb) {
+        try { Cb.call(); } catch (e) { return e.getText(); }
+        return "no exception";
+    }
+
+    /***********************************************************************
+     * UTF-8, US-ASCII and ISO-8859-1
+     *********************************************************************/
+    @Test(name = "(charset) ISO-8859-1 maps each byte to the same code point.")
+    public latin1Decode() { return test.expect(this.dec("ISO-8859-1", [233, 65, 255, 66]), "233,65,255,66"); }
+
+    @Test(name = "(charset) US-ASCII decodes bytes above 127 as U+FFFD.")
+    public asciiDecode() { return test.expect(this.dec("US-ASCII", [233, 65, 255, 66]), "65533,65,65533,66"); }
+
+    @Test(name = "(charset) UTF-8 decodes a valid 4-byte sequence as a surrogate pair.")
+    public utf8DecodeEmoji() { return test.expect(this.dec("UTF-8", [240, 159, 152, 128]), "55357,56832"); }
+
+    @Test(name = "(charset) UTF-8 replaces each maximal invalid subpart with one U+FFFD.")
+    public utf8DecodeSubparts() {
+        test.expect(this.dec("UTF-8", [224, 128, 65]), "65533,65533,65");
+        test.expect(this.dec("UTF-8", [225, 128, 65]), "65533,65");
+        test.expect(this.dec("UTF-8", [244, 144, 128, 128]), "65533,65533,65533,65533");
+        return test.expect(this.dec("UTF-8", [240, 159, 152]), "65533");
+    }
+
+    @Test(name = "(charset) UTF-8 replaces an encoded surrogate with one U+FFFD.")
+    public utf8DecodeSurrogate() { return test.expect(this.dec("UTF-8", [237, 160, 128, 65]), "65533,65"); }
+
+    @Test(name = "(charset) base64.decode reads its bytes with the same UTF-8 decoder.")
+    public base64DecodeSurrogate() { return test.expect(this.units(base64.decode("7aCA")), "65533"); }
+
+    @Test(name = "(charset) ISO-8859-1 encodes characters above U+00FF as '?'.")
+    public latin1Encode() { return test.expect(this.enc("ISO-8859-1", "a\u00e9\u20acz"), "97,233,63,122"); }
+
+    @Test(name = "(charset) US-ASCII encodes characters above U+007F as '?'.")
+    public asciiEncode() { return test.expect(this.enc("US-ASCII", "a\u00e9z"), "97,63,122"); }
+
+    @Test(name = "(charset) UTF-8 encodes a 4-byte character.")
+    public utf8Encode() { return test.expect(this.enc("UTF-8", "\u00e9\u20ac"), "195,169,226,130,172"); }
+
+    /***********************************************************************
+     * Single-byte tables
+     *********************************************************************/
+    @Test(name = "(charset) windows-1252 decodes 0x80 as the euro sign and unmapped bytes as U+FFFD.")
+    public cp1252Decode() { return test.expect(this.dec("windows-1252", [128, 129, 141, 159, 233]), "8364,65533,65533,376,233"); }
+
+    @Test(name = "(charset) windows-1252 encodes the euro sign as 0x80.")
+    public cp1252Encode() { return test.expect(this.enc("windows-1252", "\u20ac\u0153\u0101"), "128,156,63"); }
+
+    @Test(name = "(charset) ISO-8859-7 decodes Greek and leaves unassigned bytes as U+FFFD.")
+    public iso7Decode() { return test.expect(this.dec("ISO-8859-7", [233, 164, 255]), "953,8364,65533"); }
+
+    @Test(name = "(charset) ISO-8859-15 has the euro sign at 0xA4.")
+    public iso15() {
+        test.expect(this.dec("ISO-8859-15", [164]), "8364");
+        return test.expect(this.enc("ISO-8859-15", "\u20ac\u00a4"), "164,63");
+    }
+
+    @Test(name = "(charset) ISO-8859-11 (Thai) is found under its alias.")
+    public iso11() { return test.expect(this.dec("ISO-8859-11", [161]), "3585"); }
+
+    @Test(name = "(charset) ISO-8859-5 encodes Cyrillic.")
+    public iso5Encode() { return test.expect(this.enc("ISO-8859-5", "\u0434\u0401"), "212,161"); }
+
+    /***********************************************************************
+     * UTF-16
+     *********************************************************************/
+    @Test(name = "(charset) UTF-16 reads a byte-order mark and defaults to big-endian.")
+    public utf16Bom() {
+        test.expect(this.dec("UTF-16", [254, 255, 0, 65]), "65");
+        test.expect(this.dec("UTF-16", [255, 254, 65, 0]), "65");
+        return test.expect(this.dec("UTF-16", [65, 1]), "16641");
+    }
+
+    @Test(name = "(charset) UTF-16BE and UTF-16LE keep a leading FE FF as U+FEFF.")
+    public utf16NoBom() {
+        test.expect(this.dec("UTF-16BE", [254, 255, 0, 65]), "65279,65");
+        return test.expect(this.dec("UTF-16LE", [255, 254, 65, 0]), "65279,65");
+    }
+
+    @Test(name = "(charset) UTF-16 gives one U+FFFD for a trailing odd byte.")
+    public utf16OddByte() { return test.expect(this.dec("UTF-16BE", [0, 65, 66]), "65,65533"); }
+
+    @Test(name = "(charset) UTF-16 gives one U+FFFD for a high surrogate and the unit after it.")
+    public utf16BadPair() {
+        test.expect(this.dec("UTF-16BE", [216, 1, 1, 65]), "65533");
+        test.expect(this.dec("UTF-16BE", [216, 1, 216, 1, 220, 1]), "65533,65533");
+        return test.expect(this.dec("UTF-16BE", [1, 65, 220, 1, 1, 66]), "321,65533,322");
+    }
+
+    @Test(name = "(charset) UTF-16 decodes a surrogate pair.")
+    public utf16Pair() { return test.expect(this.dec("UTF-16LE", [61, 216, 0, 222]), "55357,56832"); }
+
+    @Test(name = "(charset) UTF-16 writes a big-endian byte-order mark, but not for empty text.")
+    public utf16Encode() {
+        test.expect(this.enc("UTF-16", "A\u00e9"), "254,255,0,65,0,233");
+        test.expect(this.enc("UTF-16LE", "A\u00e9"), "65,0,233,0");
+        b = new Buffer(4);
+        return test.expect(b.setString("", "UTF-16"), 0);
+    }
+
+    /***********************************************************************
+     * UTF-32
+     *********************************************************************/
+    @Test(name = "(charset) UTF-32 reads either byte-order mark.")
+    public utf32Bom() {
+        test.expect(this.dec("UTF-32", [0, 0, 254, 255, 0, 0, 0, 65]), "65");
+        return test.expect(this.dec("UTF-32", [255, 254, 0, 0, 65, 0, 0, 0]), "65");
+    }
+
+    @Test(name = "(charset) UTF-32BE and UTF-32LE drop a leading byte-order mark in their own order.")
+    public utf32FixedBom() {
+        test.expect(this.dec("UTF-32BE", [0, 0, 254, 255, 0, 0, 0, 65]), "65");
+        test.expect(this.dec("UTF-32LE", [255, 254, 0, 0, 65, 0, 0, 0]), "65");
+        return test.expect(this.dec("UTF-32BE", [0, 0, 0, 65, 0, 0, 254, 255]), "65,65279");
+    }
+
+    @Test(name = "(charset) UTF-32 gives U+FFFD for a value past U+10FFFF and for leftover bytes.")
+    public utf32Invalid() {
+        test.expect(this.dec("UTF-32BE", [0, 17, 1, 1, 0, 0, 0, 65]), "65533,65");
+        test.expect(this.dec("UTF-32BE", [128, 1, 1, 1]), "65533");
+        return test.expect(this.dec("UTF-32BE", [0, 0, 0, 65, 66, 67]), "65,65533");
+    }
+
+    @Test(name = "(charset) Decoding keeps U+0000 characters.")
+    public decodeNul() {
+        b = new Buffer(4);
+        test.expect(#b.getString(), 4);
+        return test.expect(this.dec("UTF-16BE", [0, 65, 0, 0, 0, 66]), "65,0,66");
+    }
+
+    @Test(name = "(charset) UTF-32 decodes a surrogate code point as an unpaired surrogate.")
+    public utf32Surrogate() {
+        s = this.bytesBuf([0, 0, 216, 0]).getString("UTF-32");
+        test.expect(s.length(), 1);
+        return test.expect(s.compare("\u0000"), 55296);
+    }
+
+    @Test(name = "(charset) UTF-32 encodes without a byte-order mark.")
+    public utf32Encode() {
+        test.expect(this.enc("UTF-32", "A"), "0,0,0,65");
+        return test.expect(this.enc("UTF-32LE", "\u00e9"), "233,0,0,0");
+    }
+
+    /***********************************************************************
+     * Names and errors
+     *********************************************************************/
+    @Test(name = "(charset) Names match Java's aliases, ignoring case, with '_' read as '-'.")
+    public aliases() {
+        test.expect(this.dec("latin1", [233]), "233");
+        test.expect(this.dec("cp1252", [128]), "8364");
+        test.expect(this.dec("utf_16", [0, 65]), "65");
+        test.expect(this.dec("UnicodeBig", [0, 65]), "65");
+        test.expect(this.dec("x-utf-32le", [65, 0, 0, 0]), "65");
+        return test.expect(this.dec("iso8859_15", [164]), "8364");
+    }
+
+    @Test(name = "(charset) getString reports an unsupported charset by its upper-case name.")
+    public getStringUnsupported() {
+        txt = this.errText(::getFoo);
+        return test.expect(txt.contains("Buffer.getString(): Unsopported encoding exception. (ISO-8859-10)"), true);
+    }
+    public getFoo() { b = new Buffer(2); return b.getString("iso_8859_10"); }
+
+    @Test(name = "(charset) addString reports an illegal charset name as Java's IllegalCharsetNameException.")
+    public addStringIllegal() {
+        txt = this.errText(::addIllegal);
+        return test.expect(txt.contains("java.nio.charset.IllegalCharsetNameException: A B"), true);
+    }
+    public addIllegal() { b = new Buffer(8); return b.addString("x", "a b"); }
+
+    @Test(name = "(charset) setStringAt reports an unknown charset as Java's UnsupportedCharsetException.")
+    public setStringAtUnsupported() {
+        txt = this.errText(::setAtFoo);
+        return test.expect(txt.contains("java.nio.charset.UnsupportedCharsetException: FOO"), true);
+    }
+    public setAtFoo() { b = new Buffer(8); return b.setStringAt(0, "x", "foo"); }
+
+    @Test(name = "(charset) setString reports an unknown charset with its own message.")
+    public setStringUnsupported() {
+        txt = this.errText(::setFoo);
+        return test.expect(txt.contains("Buffer._setString(): Unsupported encoding exception. FOO"), true);
+    }
+    public setFoo() { b = new Buffer(8); return b.setString("x", "foo"); }
+
+    /***********************************************************************
+     * Write cursor and byte counts
+     *********************************************************************/
+    @Test(name = "(charset) addString moves the write cursor by the UTF-8 length, whatever the charset.")
+    public addStringCursor() {
+        b = new Buffer(16);
+        b.addString("\u00e9\u20ac", "UTF-16LE");
+        test.expect(b.getWriteCursor(), 5);
+        test.expect(this.bytesOf(b, 4), "233,0,172,32");
+        b.addString("\u00e9", "ISO-8859-1");
+        return test.expect(b.getWriteCursor(), 7);
+    }
+
+    @Test(name = "(charset) setStringAt returns the encoded byte count.")
+    public setStringAtCount() {
+        b = new Buffer(8);
+        test.expect(b.setStringAt(0, "\u00e9", "ISO-8859-1"), 1);
+        test.expect(b.setStringAt(0, "\u00e9", "UTF-8"), 2);
+        return test.expect(b.setStringAt(0, "\u00e9", "UTF-32"), 4);
+    }
+
+    @Test(name = "(charset) getStringAt decodes a slice and moves the read cursor.")
+    public getStringAtSlice() {
+        b = this.bytesBuf([0, 65, 0, 233, 0, 66]);
+        test.expect(this.units(b.getStringAt(4, 0, "UTF-16BE")), "65,233");
+        test.expect(this.units(b.getStringAt(2, -1, "UTF-16BE")), "65");
+        return test.expect(this.units(b.getStringAt(2, -1, "UTF-16BE")), "233");
+    }
+}
