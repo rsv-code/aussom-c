@@ -374,23 +374,12 @@ static av_type *eval_stack_slow(ast_node *n, environment *env)
     return eval_stack_overflow(env, n->line_num);
 }
 
-/* Every node evaluation passes through here, which makes it the place
- * to stop before the native stack runs out (see stack_guard.h). This
- * covers nesting in code. A value walker that runs low instead leaves
- * the thread tripped, and its caller (the extern bridge, or an
- * evaluator that rendered a value) turns that into the exception.
- *
- * The bounds come from the current call frame rather than thread-local
- * storage; see stack_guard.h for why and for the other-thread case. */
-av_type *ast_node_eval(ast_node *n, environment *env, bool getref)
+/* Evaluates `n` by its type. Inlined into both callers below, so the
+ * path with no debugger is the same code it was before the debugger
+ * hooks existed. */
+static inline __attribute__((always_inline))
+av_type *eval_by_type(ast_node *n, environment *env, bool getref)
 {
-    const callstack *cs = (env != NULL) ? env->st : NULL;
-    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
-    if (__builtin_expect(cs == NULL || here < cs->stack_limit
-            || here >= cs->stack_high, 0)) {
-        av_type *ov = eval_stack_slow(n, env);
-        if (ov != NULL) return ov;
-    }
     switch (n->type) {
     case AST_TYPE_NULL:           return ast_null_eval(n, env, getref);
     case AST_TYPE_BOOL:           return ast_bool_eval(n, env, getref);
@@ -429,4 +418,70 @@ av_type *ast_node_eval(ast_node *n, environment *env, bool getref)
     }
     return eval_make_exception(env, n->line_num, "NOT_IMPLEMENTED",
         "Evaluation not implemented for this node type yet.");
+}
+
+/* astNode.eval's slow path, taken only while a debugger is installed.
+ * Before the node: a set breakpoint flag pauses with BREAKPOINT,
+ * otherwise should_pause_for_step may pause with STEP. After it: the
+ * first time an exception value flows out, on_exception hears of it,
+ * once, deduplicated by the value's debugger_seen flag.
+ *
+ * Java's hooks abort by throwing aussomException. Here a hook returns
+ * false, and the node's result becomes the cancellation exception,
+ * which unwinds the run the way engine_cancel does. */
+__attribute__((noinline))
+static av_type *eval_debug(ast_node *n, environment *env, bool getref)
+{
+    engine *eng = env->eng;
+    const aussom_debugger *dbg = eng->debugger;
+    if (dbg != NULL) {
+        bool go = true;
+        if (n->breakpoint) {
+            go = dbg->on_pause(dbg->data, n, env, AUSSOM_PAUSE_BREAKPOINT);
+        } else if (dbg->should_pause_for_step(dbg->data, n, env)) {
+            go = dbg->on_pause(dbg->data, n, env, AUSSOM_PAUSE_STEP);
+        }
+        if (!go) return make_cancelled(env, n->line_num);
+    }
+
+    av_type *ret = eval_by_type(n, env, getref);
+
+    if (ret != NULL && av_is_ex(ret)) {
+        av_exception *ex = (av_exception *)ret;
+        if (!av_exception_is_debugger_seen(ex)) {
+            av_exception_set_debugger_seen(ex, true);
+            dbg = eng->debugger;
+            if (dbg != NULL && !dbg->on_exception(dbg->data, ex, env)) {
+                return make_cancelled(env, n->line_num);
+            }
+        }
+    }
+    return ret;
+}
+
+/* Every node evaluation passes through here, which makes it the place
+ * to stop before the native stack runs out (see stack_guard.h). This
+ * covers nesting in code. A value walker that runs low instead leaves
+ * the thread tripped, and its caller (the extern bridge, or an
+ * evaluator that rendered a value) turns that into the exception.
+ *
+ * The bounds come from the current call frame rather than thread-local
+ * storage; see stack_guard.h for why and for the other-thread case.
+ *
+ * It is also the debugger's hook site, as astNode.eval is in Java. With
+ * no debugger installed that costs one branch on the engine's
+ * debug_mode flag. */
+av_type *ast_node_eval(ast_node *n, environment *env, bool getref)
+{
+    const callstack *cs = (env != NULL) ? env->st : NULL;
+    uintptr_t here = (uintptr_t)__builtin_frame_address(0);
+    if (__builtin_expect(cs == NULL || here < cs->stack_limit
+            || here >= cs->stack_high, 0)) {
+        av_type *ov = eval_stack_slow(n, env);
+        if (ov != NULL) return ov;
+    }
+    if (__builtin_expect(env != NULL && env->eng != NULL && env->eng->debug_mode, 0)) {
+        return eval_debug(n, env, getref);
+    }
+    return eval_by_type(n, env, getref);
 }

@@ -211,8 +211,8 @@ static int av_test(void)
 
 /* --- script evaluation (developer flag --eval) ------------------- */
 
-/* Parses `src` in script mode (bare top-level statements) and
- * evaluates it, then prints the resulting locals. */
+/* Runs `src` in script mode (bare top-level statements), then prints
+ * the resulting locals. */
 static int eval_script(const char *src)
 {
     /* --eval is script mode, which is off by default. */
@@ -220,14 +220,19 @@ static int eval_script(const char *src)
     av_strmap_put(secman->props, "aussom.script.mode.enable",
                   &av_bool_new(true)->base.base);
     engine *eng = engine_new_with_security(secman);
-    ast_statement_list *script = ast_statement_list_new();
-    if (!aussom_parse_string_script(eng, src, "<eval>", script)) {
+    const char *err = engine_set_script_mode(eng, true);
+    if (err != NULL) {
+        fprintf(stderr, "%s\n", err);
+        return 1;
+    }
+    engine_set_script_file_name(eng, "<eval>");
+    ast_statement_list *script = NULL;
+    if (engine_parse_script_line(eng, src, 1, &script) != NULL) {
         fprintf(stderr, "parse failed\n");
         return 1;
     }
 
-    av_strmap *locals = av_strmap_new_unlocked();
-    av_type *res = eval_run_statements(eng, script, locals);
+    av_type *res = engine_eval_parsed_script(eng, script);
     if (av_is_ex(res)) {
         fputs("exception:\n", stderr);
         av_text_write_out(av_str(res), stderr);
@@ -235,6 +240,7 @@ static int eval_script(const char *src)
         return 1;
     }
 
+    av_strmap *locals = environment_locals(engine_get_script_environment(eng));
     av_strmap_lock(locals);
     size_t n = av_strmap_size_locked(locals);
     for (size_t i = 0; i < n; i++) {

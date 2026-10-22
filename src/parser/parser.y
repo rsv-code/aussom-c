@@ -2080,11 +2080,14 @@ static void yyerror(YYLTYPE *yyllocp, void *scanner, parser_ctx *ctx,
  * both explicitly, so nothing about this parse is reachable from
  * another one. That is what lets two engines parse at the same time. */
 static int parse_with_yyin(engine *eng, FILE *fp, const char *file_name,
-                            ast_statement_list *script_target)
+                            ast_statement_list *script_target, int line_offset,
+                            ast_node_array *leftovers)
 {
     engine_clear_parse_exception(eng);
     parser_ctx *ctx = parser_ctx_new(eng, file_name);
     ctx->script_stmt_target = script_target;
+    ctx->line_offset = line_offset;
+    if (leftovers != NULL) ast_node_array_init(leftovers);
 
     void *scanner = aussom_lex_begin(ctx, fp);
     if (scanner == NULL) {
@@ -2102,28 +2105,12 @@ static int parse_with_yyin(engine *eng, FILE *fp, const char *file_name,
     }
 
     /* Closures written in top-level statements never pass a
-     * classSection, so they are still pending here. aussom-base hoists
-     * those onto its synthetic script class; this port has no such
-     * class -- script statements evaluate with a NULL class instance,
-     * which is also why `::name` at top level already yields
-     * CALLBACK_UNBOUND -- so there is nowhere for the definition to
-     * live and it is a parse error, matching the branch aussom-base
-     * takes when its script class is absent. */
-    {
-        ast_node_array leftovers;
-        parser_ctx_drain_pending_closures(ctx, &leftovers);
-        if (leftovers.count > 0) {
-            ctx->syntax_errors = true;
-            engine_set_parse_error(eng);
-            char cmsg[224];
-            snprintf(cmsg, sizeof(cmsg),
-                "Closure '%s' defined outside a class; there is no script "
-                "class to receive it.", leftovers.items[0]->name);
-            engine_add_parse_diagnostic(eng, file_name,
-                leftovers.items[0]->line_num, leftovers.items[0]->col_num, cmsg);
-            parse_report(eng, file_name, leftovers.items[0]->line_num, cmsg);
-        }
-    }
+     * classSection, so they are still pending here. Handed back to
+     * aussom_parse_statements, which hoists them onto the script class,
+     * as Engine.parseStatements does. A file or string parse has no
+     * top-level statements to hold one, and drops them as Java's
+     * parseFile and parseString do. */
+    if (leftovers != NULL) parser_ctx_drain_pending_closures(ctx, leftovers);
 
     aussom_lex_end(scanner);
     return (rc == 0 && !ctx->syntax_errors && !eng->parse_error) ? 0 : -1;
@@ -2167,7 +2154,7 @@ bool aussom_parse_file(engine *eng, const char *file_path)
         }
     }
 
-    int rc = parse_with_yyin(eng, fp, file_path, NULL);
+    int rc = parse_with_yyin(eng, fp, file_path, NULL, 0, NULL);
     fclose(fp);
     return rc == 0;
 }
@@ -2182,23 +2169,19 @@ bool aussom_parse_string(engine *eng, const char *source, const char *file_name)
         engine_set_parse_error(eng);
         return false;
     }
-    int rc = parse_with_yyin(eng, fp, file_name, NULL);
+    int rc = parse_with_yyin(eng, fp, file_name, NULL, 0, NULL);
     fclose(fp);
     return rc == 0;
 }
 
-bool aussom_parse_string_script(engine *eng, const char *source,
-                                const char *file_name,
-                                ast_statement_list *script_target)
+bool aussom_parse_statements(engine *eng, const char *file_name,
+                             const char *source, int line_offset,
+                             ast_statement_list *target)
 {
-    /* Engine.parseScriptLine's gate, checked on every entry so a policy
-     * change takes effect at once. */
-    if (!security_manager_get_property_boolean(engine_get_security_manager(eng), "aussom.script.mode.enable", false)) {
-        engine_err(eng, "aussom_parse_string_script: Security exception, action "
-                        "'aussom.script.mode.enable' not permitted.");
-        engine_set_parse_error(eng);
-        return false;
-    }
+    /* One submission is one parse: drop the diagnostics of the one
+     * before, so the caller reads only its own. */
+    engine_clear_parse_diagnostics(eng);
+
     FILE *fp = aussom_memstream_open_read(source, strlen(source));
     if (fp == NULL) {
         char msg[512];
@@ -2207,7 +2190,8 @@ bool aussom_parse_string_script(engine *eng, const char *source,
         engine_set_parse_error(eng);
         return false;
     }
-    int rc = parse_with_yyin(eng, fp, file_name, script_target);
+    ast_node_array leftovers;
+    int rc = parse_with_yyin(eng, fp, file_name, target, line_offset, &leftovers);
     fclose(fp);
 
     /* Engine.parseStatements catches what the parse threw and turns it
@@ -2220,6 +2204,51 @@ bool aussom_parse_string_script(engine *eng, const char *source,
         engine_add_parse_diagnostic(eng, file_name, PARSE_DIAG_NO_POSITION,
                                     PARSE_DIAG_NO_POSITION, thrown);
         engine_set_parse_error(eng);
+    }
+
+    /* Closures defined in top-level statements are hoisted onto the
+     * script class. With no script class to receive them there is
+     * nowhere for the definition to live, so that is a parse error. */
+    if (leftovers.count > 0) {
+        ast_class *script_class = engine_get_script_class(eng);
+        char text[1024];
+        if (script_class != NULL) {
+            for (size_t i = 0; i < leftovers.count; i++) {
+                ast_funct_def *c = (ast_funct_def *)leftovers.items[i];
+                char *sig = NULL;
+                ast_funct_def *prior = ast_class_add_function(script_class, c, &sig);
+                if (prior == NULL) continue;
+                /* Duplicate closure name and signature on the script
+                 * class: astClass.addFunction's error. */
+                size_t n = strlen(c->base.name) + strlen(sig) + 512;
+                char *msg = AUSSOM_ALLOC_ATOMIC(n);
+                snprintf(msg, n,
+                    "Duplicate method overload '%s(%s)' declared at %s:%d; first "
+                    "declared at %s:%d.",
+                    c->base.name, sig,
+                    c->base.file_name != NULL ? c->base.file_name : "",
+                    c->base.line_num,
+                    prior->base.file_name != NULL ? prior->base.file_name : "",
+                    prior->base.line_num);
+                engine_err(eng, msg);
+                engine_add_parse_diagnostic(eng, file_name, c->base.line_num,
+                                            c->base.col_num, msg);
+                engine_set_parse_error(eng);
+                rc = -1;
+                break;
+            }
+        } else {
+            ast_node *orphan = leftovers.items[0];
+            static const char msg[] = "PARSE_ERROR: Closure defined outside a "
+                "class with no script class to receive it.";
+            snprintf(text, sizeof(text), "%s [%d]: %s", file_name,
+                     orphan->line_num, msg);
+            engine_err(eng, text);
+            engine_add_parse_diagnostic(eng, file_name, orphan->line_num,
+                                        orphan->col_num, msg);
+            engine_set_parse_error(eng);
+            rc = -1;
+        }
     }
     return rc == 0;
 }

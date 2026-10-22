@@ -65,6 +65,10 @@ typedef struct lex_extra {
 #define current_ctx (yyextra->ctx)
 #define yycol       (yyextra->column)
 #define string_buf  (yyextra->sbuf)
+/* The line every token and error reports: flex's count plus the
+ * parse's line offset, as Lexer.symbol and Lexer.error add lineOffset
+ * to yyline + 1. */
+#define yyline_     (yylineno + (current_ctx != NULL ? current_ctx->line_offset : 0))
 
 static void strbuf_reset(strbuf *b)
 {
@@ -168,9 +172,9 @@ static int utf16_len(const char *s, size_t n)
  * column tracking stays accurate across all start conditions. */
 #define YY_USER_ACTION                                  \
     do {                                                \
-        yylloc->first_line = yylineno;                  \
+        yylloc->first_line = yyline_;                   \
         yylloc->first_column = yycol;                   \
-        yylloc->last_line = yylineno;                   \
+        yylloc->last_line = yyline_;                    \
         int units_ = utf16_len(yytext, yyleng);         \
         yylloc->last_column = yycol + units_ - 1;       \
         yycol += units_;                                \
@@ -441,13 +445,13 @@ static void lex_error(yyscan_t yyscanner, const char *msg, int col)
         current_ctx->syntax_errors = true;
         engine_set_parse_error(current_ctx->eng);
         engine_add_parse_diagnostic(current_ctx->eng, current_ctx->file_name,
-                                    yylineno, col, msg);
+                                    yyline_, col, msg);
         /* Through the owning engine's logger, so a syntax error is
          * attributable to the engine that was parsing and a host
          * capturing one engine's output does not receive another's. */
         char text[640];
         snprintf(text, sizeof(text), "%s [%d]: Error at line %d, column %d : %s",
-            current_ctx->file_name, yylineno, yylineno, col, msg);
+            current_ctx->file_name, yyline_, yyline_, col, msg);
         engine_err(current_ctx->eng, text);
     } else {
         /* Driven standalone, with no engine to attribute the message

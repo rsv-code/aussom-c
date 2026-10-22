@@ -10,7 +10,7 @@
  * Positions in error text count UTF-16 code units, as Java's do.
  */
 
-#include "json_simple.h"
+#include "aussom/json_simple.h"
 
 #include <errno.h>
 #include <stdio.h>

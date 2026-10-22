@@ -13,9 +13,10 @@
 
 /* Forward decl; a frame may name the function it represents. */
 struct ast_funct_def;
+struct av_strmap;
 
 /* Mirrors com.aussom.CallStack: a singly linked chain of call frames
- * used for stack traces and (later) the debugger. Each interpreter
+ * used for stack traces and the debugger. Each interpreter
  * thread owns its own chain, so unlike the Java original these
  * accessors are not individually locked -- the chain is not shared
  * across threads in the eval model. GC-allocated. */
@@ -33,6 +34,12 @@ typedef struct callstack {
     const char *function_name;
     const char *text;
     struct ast_funct_def *called_function;
+
+    /* The locals of the call this frame stands for, or NULL when it has
+     * none of its own. Ports CallStack.locals: set on a function body's
+     * "Defined." frame, so a debugger paused deeper down can still show
+     * what each frame below it holds. */
+    struct av_strmap *locals;
 
     /* How many Aussom function calls are active on this chain, with
      * the root frame at 0. Recorded when the frame is parented so
@@ -79,6 +86,9 @@ int callstack_get_depth(const callstack *cs);
 
 void callstack_set_called_function(callstack *cs, struct ast_funct_def *f);
 struct ast_funct_def *callstack_get_called_function(const callstack *cs);
+
+void callstack_set_locals(callstack *cs, struct av_strmap *locals);
+struct av_strmap *callstack_get_locals(const callstack *cs);
 
 /* Builds the multi-line trace from this frame up through its parents.
  * Returns a GC-managed string. */

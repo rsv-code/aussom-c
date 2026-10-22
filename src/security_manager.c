@@ -79,8 +79,7 @@ static void seed_standard_props(av_strmap *p)
     props_put_bool(p, "test.mock.inject", false);
     props_put_bool(p, "test.mock.spy", false);
 
-    /* Script mode. See aussom_parse_string_script and
-     * eval_run_statements. */
+    /* Script mode. See engine_set_script_mode. */
     props_put_bool(p, "aussom.script.mode.enable", false);
 
     /* Debugger attach. */

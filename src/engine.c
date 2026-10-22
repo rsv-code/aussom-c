@@ -16,6 +16,7 @@
 #include "aussom/av.h"
 #include "aussom/av_list.h"
 #include "aussom/av_strmap.h"
+#include "aussom/ast.h"
 #include "aussom/ast_class.h"
 #include "aussom/console.h"
 #include "aussom/environment.h"
@@ -71,7 +72,13 @@ engine *engine_new_with_security(security_manager *secman)
     e->diags = NULL;
     e->diags_count = 0;
     e->diags_capacity = 0;
+    e->script_mode = false;
+    e->script_class = NULL;
+    e->script_main_fn = NULL;
+    e->script_instance = NULL;
     e->script_env = NULL;
+    e->script_file_name = AUSSOM_STRDUP("<script>");
+    e->script_cursor = 0;
     e->control = CONTROL_RUNNING;
     pthread_mutex_init(&e->control_lock, NULL);
     pthread_cond_init(&e->control_cond, NULL);
@@ -89,6 +96,9 @@ engine *engine_new_with_security(security_manager *secman)
     e->limits.sleep_slice_ms = ENGINE_DEFAULT_SLEEP_SLICE_MS;
     e->limits.source_bytes = 0;
     engine_refresh_limits(e);
+    e->main_funct_args = av_list_new();
+    e->debug_mode = false;
+    e->debugger = NULL;
 
     /* Every engine parses lang.aus for itself. That is what makes two
      * engines in one process independent: no class definition object is
@@ -350,6 +360,19 @@ size_t engine_interpreter_thread_count(engine *e)
     return n;
 }
 
+/* The next id to hand out, and the calling thread's id once it has one
+ * (0 until then). */
+static int64_t next_thread_id = 1;
+static _Thread_local int64_t this_thread_id = 0;
+
+int64_t engine_thread_id(void)
+{
+    if (this_thread_id == 0) {
+        this_thread_id = __atomic_fetch_add(&next_thread_id, 1, __ATOMIC_RELAXED);
+    }
+    return this_thread_id;
+}
+
 /* This scope's CPU usage so far. Caller holds control_lock. */
 static uint64_t scope_cpu(thread_scope *sc)
 {
@@ -459,10 +482,6 @@ int64_t engine_get_max_call_depth(const engine *e)
     return e->limits.call_depth;
 }
 
-struct environment *engine_get_script_environment(const engine *e)
-{
-    return e->script_env;
-}
 
 struct security_manager *engine_get_security_manager(const engine *e)
 {
@@ -979,27 +998,161 @@ const char *engine_get_include(const engine *e, size_t i)
     return e->includes[i];
 }
 
-/* --- script entry ------------------------------------------------ */
+/* --- script mode ------------------------------------------------- */
 
-av_type *eval_run_statements(engine *eng, struct ast_statement_list *script,
-                             struct av_strmap *locals)
+static bool script_mode_allowed(engine *e)
 {
-    /* Engine.evalParsedScript's gate, checked on every entry. */
-    if (!security_manager_get_property_boolean(eng->secman, "aussom.script.mode.enable", false)) {
-        return &av_exception_new("eval_run_statements: Security exception, action "
+    return security_manager_get_property_boolean(e->secman, "aussom.script.mode.enable", false);
+}
+
+bool engine_is_script_mode(const engine *e)
+{
+    return e->script_mode;
+}
+
+const char *engine_set_script_mode(engine *e, bool on)
+{
+    if (e->script_mode == on) return NULL;
+    if (on) {
+        /* Checked on every entry, against a policy changed at run
+         * time. */
+        if (!script_mode_allowed(e)) {
+            return "Engine.setScriptMode: Security exception, action "
+                   "'aussom.script.mode.enable' not permitted.";
+        }
+
+        /* The synthetic class with an empty main(args). */
+        e->script_class = ast_class_new_named(ENGINE_SCRIPT_CLASS_NAME);
+        ast_node_set_parser_info(&e->script_class->base, "<script>", 1, 1);
+        e->script_main_fn = ast_funct_def_new_named("main");
+        ast_node_set_parser_info(&e->script_main_fn->base, "<script>", 1, 1);
+        e->script_main_fn->base.access = ACCESS_PUBLIC;
+        ast_funct_def_args_list *args = ast_funct_def_args_list_new();
+        ast_funct_def_args_list_add(args, &ast_var_new_named("args")->base);
+        ast_funct_def_set_arg_list(e->script_main_fn, args);
+        ast_funct_def_set_instruction_list(e->script_main_fn, ast_statement_list_new());
+        char *sig = NULL;
+        ast_class_add_function(e->script_class, e->script_main_fn, &sig);
+
+        /* The long-lived environment, and the synthetic class's
+         * instance built against it. Its locals outlive any one call
+         * and a host may read them from another thread, so the map
+         * locks. */
+        e->script_env = environment_new(e);
+        environment_set(e->script_env, NULL, av_strmap_new(), callstack_new());
+        av_type *inst = class_instantiate(e->script_env, e->script_class, false,
+                                          av_list_new());
+        if (av_is_ex(inst)) {
+            return av_exception_get_text((av_exception *)inst);
+        }
+        e->script_instance = (av_object *)inst;
+        environment_set_class_instance(e->script_env, e->script_instance);
+        /* cur_obj stays NULL. A top-level name is looked up in the
+         * locals and the static classes; with cur_obj set it would be
+         * looked up only among the members of that object. */
+        e->script_cursor = 0;
+    }
+    e->script_mode = on;
+    return NULL;
+}
+
+void engine_set_script_file_name(engine *e, const char *file_name)
+{
+    e->script_file_name = AUSSOM_STRDUP(file_name);
+}
+
+const char *engine_get_script_file_name(const engine *e)
+{
+    return e->script_file_name;
+}
+
+ast_class *engine_get_script_class(const engine *e)
+{
+    return e->script_class;
+}
+
+struct environment *engine_get_script_environment(const engine *e)
+{
+    return e->script_env;
+}
+
+av_type *engine_eval_line(engine *e, const char *source, int line_number)
+{
+    ast_statement_list *body = NULL;
+    const char *err = engine_parse_script_line(e, source, line_number, &body);
+    if (err != NULL) return &av_exception_new(err)->base.base;
+    return engine_eval_parsed_script(e, body);
+}
+
+const char *engine_parse_script_line(engine *e, const char *source, int line_number,
+                                     ast_statement_list **body)
+{
+    if (!e->script_mode) {
+        return "Engine.parseScriptLine: script mode is not enabled.";
+    }
+    if (!script_mode_allowed(e)) {
+        return "Engine.parseScriptLine: Security exception, action "
+               "'aussom.script.mode.enable' not permitted.";
+    }
+
+    ast_statement_list *b = ast_funct_def_get_instruction_list(e->script_main_fn);
+
+    /* The body's size before the parse, so a parse error can remove
+     * the statements the parser already appended. */
+    size_t slice_start = b->statements.count;
+
+    /* line_number is 1-based, and the scanner adds the offset to its
+     * own 1-based count. */
+    aussom_parse_statements(e, e->script_file_name, source, line_number - 1, b);
+    if (engine_has_parse_error(e)) {
+        for (size_t i = slice_start; i < b->statements.count; i++) {
+            b->statements.items[i] = NULL;
+        }
+        b->statements.count = slice_start;
+        engine_clear_parse_error(e);
+        return "Engine.parseScriptLine: parse error.";
+    }
+
+    if (body != NULL) *body = b;
+    return NULL;
+}
+
+av_type *engine_eval_parsed_script(engine *e, ast_statement_list *body)
+{
+    if (!e->script_mode) {
+        return &av_exception_new(
+            "Engine.evalParsedScript: script mode is not enabled.")->base.base;
+    }
+    if (!script_mode_allowed(e)) {
+        return &av_exception_new("Engine.evalParsedScript: Security exception, action "
                                  "'aussom.script.mode.enable' not permitted.")->base.base;
     }
-    /* Policy may have changed since the engine was built. */
-    engine_refresh_limits(eng);
-    environment *env = environment_new(eng);
-    /* Java's script environment starts from an empty call stack, which
-     * adds nothing to a trace. */
-    callstack *root = callstack_new();
-    environment_set(env, NULL, (av_strmap *)locals, root);
-    /* Retained so an embedder can read session scope back out; see
-     * engine_get_script_environment. */
-    eng->script_env = env;
-    return ast_node_eval(&((ast_statement_list *)script)->base, env, false);
+
+    const ast_node_array *stmts = &body->statements;
+    size_t slice_start = e->script_cursor;
+    size_t slice_end = stmts->count;
+
+    /* Commit the cursor for the whole slice up front, so an exception
+     * or return part way through does not leave statements for the
+     * next call to pick up. */
+    e->script_cursor = slice_end;
+
+    /* Pick up any limit the host changed since the last submission. */
+    engine_refresh_limits(e);
+
+    av_type *last = &av_null_new()->base.base;
+    thread_scope *scope = engine_enter_interpreter_thread(e);
+    for (size_t i = slice_start; i < slice_end; i++) {
+        last = ast_node_eval(stmts->items[i], e->script_env, false);
+        if (av_is_ex(last)) break;
+        if (av_is_return(last)) {
+            last = av_return_get((av_return *)last);
+            break;
+        }
+        if (av_is_break(last)) break;
+    }
+    engine_exit_interpreter_thread(scope);
+    return last;
 }
 
 /* --- program entry ----------------------------------------------- */
@@ -1098,7 +1251,7 @@ int engine_run(engine *e, const char *program_name)
      * so a script defining only main() does not trip FUNCT_NOT_FOUND. */
     av_list *margs = av_list_new();
     if (class_declares_one_arg_main(main_cls)) {
-        av_list_add(margs, &av_list_new()->base.base);
+        av_list_add(margs, &e->main_funct_args->base.base);
     }
 
     environment *tenv = environment_clone(env, &inst->base);
@@ -1116,4 +1269,292 @@ int engine_run(engine *e, const char *program_name)
         return (int)av_int_get((av_int *)ret);
     }
     return 0;
+}
+
+void engine_add_main_arg(engine *e, const char *arg)
+{
+    av_list_add(e->main_funct_args, &av_string_new(arg)->base.base);
+}
+
+void engine_add_main_args(engine *e, const char *const *args, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        engine_add_main_arg(e, args[i]);
+    }
+}
+
+/* --- debugging --------------------------------------------------- */
+
+const char *engine_set_debugger(engine *e, const aussom_debugger *d)
+{
+    if (d != NULL
+        && !security_manager_get_property_boolean(e->secman, "aussom.debugger.enable", false)) {
+        return "Engine.setDebugger: Security exception, action "
+               "'aussom.debugger.enable' not permitted.";
+    }
+    e->debugger = d;
+    e->debug_mode = (d != NULL);
+    return NULL;
+}
+
+const aussom_debugger *engine_get_debugger(const engine *e)
+{
+    return e->debugger;
+}
+
+bool engine_is_debug_mode(const engine *e)
+{
+    return e->debug_mode;
+}
+
+/* Called on every node the walk below reaches. */
+typedef void (*debugger_visitor)(ast_node *n, void *ctx);
+
+static void debugger_visit_node(ast_node *n, debugger_visitor visit, void *ctx);
+
+/* Engine.debuggerVisitClass: the class node, its members, then its
+ * functions. */
+static void debugger_visit_class(ast_class *cls, debugger_visitor visit, void *ctx)
+{
+    if (cls == NULL) return;
+    visit(&cls->base, ctx);
+    for (size_t i = 0; i < cls->members.count; i++) {
+        debugger_visit_node(cls->members.items[i].value, visit, ctx);
+    }
+    size_t nf;
+    ast_funct_def **fl = ast_class_get_all_functions(cls, &nf);
+    for (size_t i = 0; i < nf; i++) {
+        debugger_visit_node(&fl[i]->base, visit, ctx);
+    }
+}
+
+static void debugger_visit_array(const ast_node_array *a, debugger_visitor visit, void *ctx)
+{
+    for (size_t i = 0; i < a->count; i++) {
+        debugger_visit_node(a->items[i], visit, ctx);
+    }
+}
+
+/* Engine.debuggerVisitNode: the node, then the children its type
+ * owns, then its child chain (the rest of a.b.c). */
+static void debugger_visit_node(ast_node *n, debugger_visitor visit, void *ctx)
+{
+    if (n == NULL) return;
+    visit(n, ctx);
+
+    switch (n->type) {
+    case AST_TYPE_FUNCTDEF: {
+        ast_funct_def *fd = (ast_funct_def *)n;
+        debugger_visit_node(&fd->arg_list->base, visit, ctx);
+        debugger_visit_node(&fd->instruction_list->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_STATEMENTLIST:
+        debugger_visit_array(&((ast_statement_list *)n)->statements, visit, ctx);
+        break;
+    case AST_TYPE_FUNCTDEFARGSLIST:
+        debugger_visit_array(&((ast_funct_def_args_list *)n)->args, visit, ctx);
+        break;
+    case AST_TYPE_EXP: {
+        ast_expression *ex = (ast_expression *)n;
+        debugger_visit_node(ex->left, visit, ctx);
+        debugger_visit_node(ex->right, visit, ctx);
+        break;
+    }
+    case AST_TYPE_IFELSE: {
+        ast_ifelse *ie = (ast_ifelse *)n;
+        debugger_visit_node(&ie->if_condition->base, visit, ctx);
+        debugger_visit_array(&ie->if_else_conditions, visit, ctx);
+        debugger_visit_node(&ie->else_instruction_list->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_CONDITION: {
+        ast_condition_block *cb = (ast_condition_block *)n;
+        debugger_visit_node(cb->expr, visit, ctx);
+        debugger_visit_node(&cb->instruction_list->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_SWITCH: {
+        ast_switch *sw = (ast_switch *)n;
+        debugger_visit_node(sw->expr, visit, ctx);
+        debugger_visit_array(&sw->case_conditions, visit, ctx);
+        debugger_visit_node(&sw->default_list->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_TRYCATCH: {
+        ast_trycatch *tc = (ast_trycatch *)n;
+        debugger_visit_node(&tc->try_inst_list->base, visit, ctx);
+        debugger_visit_node(&tc->catch_inst_list->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_WHILE: {
+        ast_while *w = (ast_while *)n;
+        debugger_visit_node(w->expr, visit, ctx);
+        debugger_visit_node(&w->instructions->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_FOR: {
+        ast_for *f = (ast_for *)n;
+        debugger_visit_node(f->expr_init, visit, ctx);
+        debugger_visit_node(f->expr_cond, visit, ctx);
+        debugger_visit_node(f->expr_inc, visit, ctx);
+        debugger_visit_node(f->each_var, visit, ctx);
+        debugger_visit_node(f->each_expr, visit, ctx);
+        debugger_visit_node(&f->instructions->base, visit, ctx);
+        break;
+    }
+    case AST_TYPE_FUNCTCALL:
+        debugger_visit_node(&((ast_funct_call *)n)->args->base, visit, ctx);
+        break;
+    case AST_TYPE_NEWINST:
+        debugger_visit_node(&((ast_new_inst *)n)->args->base, visit, ctx);
+        break;
+    case AST_TYPE_RETURN:
+        debugger_visit_node(((ast_return *)n)->value, visit, ctx);
+        break;
+    case AST_TYPE_THROW:
+        debugger_visit_node(((ast_throw *)n)->expression, visit, ctx);
+        break;
+    case AST_TYPE_OBJ:
+        debugger_visit_node(((ast_obj *)n)->index, visit, ctx);
+        break;
+    case AST_TYPE_VAR:
+        debugger_visit_node(((ast_var *)n)->associative, visit, ctx);
+        break;
+    case AST_TYPE_LIST:
+        debugger_visit_array(&((ast_list *)n)->items, visit, ctx);
+        break;
+    case AST_TYPE_MAP: {
+        ast_map *m = (ast_map *)n;
+        for (size_t i = 0; i < m->pairs.count; i++) {
+            debugger_visit_node(m->pairs.items[i].key, visit, ctx);
+            debugger_visit_node(m->pairs.items[i].value, visit, ctx);
+        }
+        break;
+    }
+    case AST_TYPE_CLASS:
+        /* A class definition reached through another node's children
+         * is walked the same way as a top-level one. */
+        debugger_visit_class((ast_class *)n, visit, ctx);
+        break;
+    default:
+        break;
+    }
+
+    if (n->child != NULL) {
+        debugger_visit_node(n->child, visit, ctx);
+    }
+}
+
+/* Engine.debuggerVisitAll: every class this engine has parsed, then
+ * the synthetic script class. */
+static void debugger_visit_all(engine *e, debugger_visitor visit, void *ctx)
+{
+    size_t n = engine_class_count(e);
+    for (size_t i = 0; i < n; i++) {
+        debugger_visit_class(engine_get_class(e, i), visit, ctx);
+    }
+    if (e->script_class != NULL) {
+        debugger_visit_class(e->script_class, visit, ctx);
+    }
+}
+
+typedef struct find_ctx {
+    const char *file_name;
+    int line;
+    ast_node **out;
+    size_t max;
+    size_t count;
+} find_ctx;
+
+static void find_visitor(ast_node *n, void *vctx)
+{
+    find_ctx *c = vctx;
+    if (n->line_num == c->line && n->file_name != NULL
+        && strcmp(n->file_name, c->file_name) == 0) {
+        if (c->count < c->max) c->out[c->count] = n;
+        c->count++;
+    }
+}
+
+size_t engine_find_nodes_by_line(engine *e, const char *file_name, int line,
+                                 ast_node **out, size_t max)
+{
+    find_ctx c = { file_name, line, out, max, 0 };
+    debugger_visit_all(e, find_visitor, &c);
+    return c.count;
+}
+
+bool engine_set_breakpoint(engine *e, const char *file_name, int line)
+{
+    ast_node *first;
+    if (engine_find_nodes_by_line(e, file_name, line, &first, 1) == 0) return false;
+    first->breakpoint = true;
+    return true;
+}
+
+/* Clears the flag on every node the walk reaches that matches, or on
+ * every node when file_name is NULL. */
+typedef struct clear_ctx {
+    const char *file_name;
+    int line;
+    bool any;
+} clear_ctx;
+
+static void clear_visitor(ast_node *n, void *vctx)
+{
+    clear_ctx *c = vctx;
+    if (c->file_name != NULL
+        && (n->line_num != c->line || n->file_name == NULL
+            || strcmp(n->file_name, c->file_name) != 0)) {
+        return;
+    }
+    if (n->breakpoint) {
+        n->breakpoint = false;
+        c->any = true;
+    }
+}
+
+bool engine_clear_breakpoint(engine *e, const char *file_name, int line)
+{
+    clear_ctx c = { file_name, line, false };
+    debugger_visit_all(e, clear_visitor, &c);
+    return c.any;
+}
+
+bool engine_clear_all_breakpoints(engine *e)
+{
+    clear_ctx c = { NULL, 0, false };
+    debugger_visit_all(e, clear_visitor, &c);
+    return c.any;
+}
+
+av_type *engine_eval_in_frame(engine *e, const char *source, environment *frame)
+{
+    /* Checked on every entry, so revoking the property stops further
+     * evaluation even while a debugger is installed. */
+    if (!security_manager_get_property_boolean(e->secman, "aussom.debugger.enable", false)) {
+        return &av_exception_new("Engine.evalInFrame: Security exception, action "
+                                 "'aussom.debugger.enable' not permitted.")->base.base;
+    }
+
+    ast_statement_list *parsed = ast_statement_list_new();
+    aussom_parse_statements(e, "<eval>", source, 0, parsed);
+    if (engine_has_parse_error(e)) {
+        engine_clear_parse_error(e);
+        return &av_exception_new("Engine.evalInFrame: parse error.")->base.base;
+    }
+
+    av_type *last = &av_null_new()->base.base;
+    const ast_node_array *stmts = &parsed->statements;
+    for (size_t i = 0; i < stmts->count; i++) {
+        last = ast_node_eval(stmts->items[i], frame, false);
+        if (av_is_ex(last)) break;
+        if (av_is_return(last)) {
+            last = av_return_get((av_return *)last);
+            break;
+        }
+        if (av_is_break(last)) break;
+    }
+    return last;
 }

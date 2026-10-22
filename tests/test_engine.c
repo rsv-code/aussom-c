@@ -23,6 +23,7 @@
 #include "aussom/av_strmap.h"
 #include "aussom/ast_statement_list.h"
 #include "aussom/engine.h"
+#include "aussom/environment.h"
 #include "aussom/security_manager.h"
 #include "aussom/parser.h"
 #include "greatest.h"
@@ -825,10 +826,11 @@ TEST a_thrown_error_in_script_mode_is_a_parse_error(void)
 {
     engine *e = quiet_engine();
     sm_put_bool(e, "aussom.script.mode.enable", true);
-    ast_statement_list *script = ast_statement_list_new();
-    ASSERT_FALSE(aussom_parse_string_script(e, "a = 99999999999999999999;",
-                                            "<eval>", script));
-    ASSERT(engine_has_parse_error(e));
+    ASSERT_EQ(NULL, engine_set_script_mode(e, true));
+    engine_set_script_file_name(e, "<eval>");
+    ASSERT_STR_EQ("Engine.parseScriptLine: parse error.",
+                  engine_parse_script_line(e, "a = 99999999999999999999;", 1, NULL));
+    ASSERT_FALSE(engine_has_parse_error(e));
     ASSERT_EQ(1, (int)engine_parse_diagnostic_count(e));
     const parse_diagnostic *d = engine_get_parse_diagnostic(e, 0);
     ASSERT_EQ(PARSE_DIAG_NO_POSITION, d->line);
@@ -1390,26 +1392,38 @@ TEST include_symlink_follow_gate(void)
 #endif
 
 /* Script mode (report L2): Java checks aussom.script.mode.enable in
- * parseScriptLine and evalParsedScript, which are these two. */
+ * setScriptMode, parseScriptLine and evalParsedScript, on every entry. */
 TEST script_mode_gate(void)
 {
     engine *e = quiet_engine();
-    ast_statement_list *script = ast_statement_list_new();
-    ASSERT_FALSE(aussom_parse_string_script(e, "a = 2 + 3;", "<gate>", script));
-    av_type *r = eval_run_statements(e, script, av_strmap_new_unlocked());
-    ASSERT(av_is_ex(r));
-    ASSERT(strstr(av_str(r), "aussom.script.mode.enable") != NULL);
+    ASSERT_STR_EQ("Engine.setScriptMode: Security exception, action "
+                  "'aussom.script.mode.enable' not permitted.",
+                  engine_set_script_mode(e, true));
+    ASSERT_FALSE(engine_is_script_mode(e));
+    ASSERT_STR_EQ("Engine.parseScriptLine: script mode is not enabled.",
+                  engine_parse_script_line(e, "a = 2 + 3;", 1, NULL));
 
     e = quiet_engine();
     sm_put_bool(e, "aussom.script.mode.enable", true);
-    script = ast_statement_list_new();
-    ASSERT(aussom_parse_string_script(e, "a = 2 + 3;", "<gate>", script));
-    av_strmap *locals = av_strmap_new_unlocked();
-    r = eval_run_statements(e, script, locals);
+    ASSERT_EQ(NULL, engine_set_script_mode(e, true));
+    ast_statement_list *body = NULL;
+    ASSERT_EQ(NULL, engine_parse_script_line(e, "a = 2 + 3;", 1, &body));
+    av_type *r = engine_eval_parsed_script(e, body);
     ASSERT_FALSE(av_is_ex(r));
-    av_type *a = av_strmap_get(locals, "a");
+    av_type *a = av_strmap_get(environment_locals(engine_get_script_environment(e)), "a");
     ASSERT(a != NULL && a->type == C_TYPE_INT);
     ASSERT_EQ(5, (int)av_int_get((av_int *)a));
+
+    /* Revoked after script mode is on: both halves refuse. */
+    sm_put_bool(e, "aussom.script.mode.enable", false);
+    ASSERT_STR_EQ("Engine.parseScriptLine: Security exception, action "
+                  "'aussom.script.mode.enable' not permitted.",
+                  engine_parse_script_line(e, "b = 1;", 2, NULL));
+    r = engine_eval_parsed_script(e, body);
+    ASSERT(av_is_ex(r));
+    ASSERT_STR_EQ("Engine.evalParsedScript: Security exception, action "
+                  "'aussom.script.mode.enable' not permitted.",
+                  av_exception_get_text((av_exception *)r));
     PASS();
 }
 

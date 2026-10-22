@@ -19,6 +19,7 @@ parser_ctx *parser_ctx_new(engine *eng, const char *file_name)
     ctx->load_extern_classes = false;
     ctx->script_stmt_target = NULL;
     ctx->syntax_errors = false;
+    ctx->line_offset = 0;
     ctx->thrown = false;
     ctx->lex_extra = NULL;
     ast_node_array_init(&ctx->pending_closures);

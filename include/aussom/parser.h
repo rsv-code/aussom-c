@@ -44,15 +44,23 @@ bool aussom_parse_file(engine *eng, const char *file_path);
  * exists. */
 bool aussom_parse_string(engine *eng, const char *source, const char *file_name);
 
-/* Script-mode variant. Top-level statements are appended to
- * `script_target` instead of being rejected. The target is mutated
- * in place. Gated by aussom.script.mode.enable, as Java's
- * parseScriptLine is: when it is off this logs a security error and
- * returns false. As in Java's parseStatements, an error the parse
- * throws is turned into an ordinary parse error here: logged, recorded
- * as a file-level diagnostic and flagged. */
-bool aussom_parse_string_script(engine *eng, const char *source,
-                                const char *file_name,
-                                ast_statement_list *script_target);
+/* Parses `source` with top-level statements appended to `target`.
+ * Ports Engine.parseStatements, the building block under
+ * engine_parse_script_line and engine_eval_in_frame. It has no
+ * security gate of its own; its callers check.
+ *
+ * line_offset is added to every line the scanner reports, so the first
+ * source line reports as line_offset + 1. Closures defined in top-level
+ * statements are added to the script class (engine_get_script_class);
+ * with script mode never turned on there is none, and that is a parse
+ * error.
+ *
+ * Clears the engine's parse diagnostics first, as Java does, so they
+ * describe only this parse. An error the parse throws is turned into an
+ * ordinary parse error: logged, recorded as a file-level diagnostic and
+ * flagged. Returns true on a clean parse. */
+bool aussom_parse_statements(engine *eng, const char *file_name,
+                             const char *source, int line_offset,
+                             ast_statement_list *target);
 
 #endif /* AUSSOM_PARSER_H */

@@ -1283,6 +1283,9 @@ av_type *class_call_closure(environment *env, bool getref, ast_class *cls,
              * deeper", which is what the call depth limit counts. */
             callstack_enter_call(cst);
             callstack_set_called_function(cst, fd);
+            /* The locals this call runs in, so a debugger paused deeper
+             * down can read them. */
+            callstack_set_locals(cst, locals);
 
             environment *tenv = environment_new(eng);
             environment_set(tenv, ci, locals, cst);

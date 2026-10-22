@@ -37,7 +37,7 @@
 /* Changes when something that existed is changed or taken away. */
 #define AUSSOM_VERSION_MAJOR 0
 /* Changes when something is added and nothing existing moves. */
-#define AUSSOM_VERSION_MINOR 2
+#define AUSSOM_VERSION_MINOR 3
 /* Changes when only the implementation did. */
 #define AUSSOM_VERSION_PATCH 0
 

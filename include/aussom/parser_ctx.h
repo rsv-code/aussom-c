@@ -32,6 +32,10 @@ typedef struct parser_ctx {
      * PARSE_ERROR via parser_ctx_script_or_error. */
     ast_statement_list *script_stmt_target;
     bool syntax_errors;
+    /* Added to every line the scanner reports, so the first source line
+     * reports as line_offset + 1. Ports Lexer.setLineOffset; 0 except
+     * for script-mode parses (engine_parse_script_line). */
+    int line_offset;
     /* Set when the parse stopped with an error aussom-base throws. The
      * error itself is on the engine (engine_parse_exception). */
     bool thrown;
@@ -40,7 +44,7 @@ typedef struct parser_ctx {
      * cannot be attached to their class from the expClosure action.
      * They accumulate here and are drained into the class by the
      * classSection actions. Leftovers at end of parse are top-level
-     * script-mode closures, which engine_parse_statements drains into
+     * script-mode closures, which aussom_parse_statements drains into
      * the synthetic script class. Holds (ast_funct_def *) as
      * ast_node *. */
     ast_node_array pending_closures;

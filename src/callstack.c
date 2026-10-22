@@ -23,6 +23,7 @@ callstack *callstack_new(void)
     cs->function_name = "";
     cs->text = "";
     cs->called_function = NULL;
+    cs->locals = NULL;
     cs->depth = 0;
     stack_guard_bounds(&cs->stack_limit, &cs->stack_high);
     return cs;
@@ -42,6 +43,7 @@ callstack *callstack_new_frame(const char *file_name, int line_number,
     cs->function_name = function_name;
     cs->text = text;
     cs->called_function = NULL;
+    cs->locals = NULL;
     cs->depth = 0;
     stack_guard_bounds(&cs->stack_limit, &cs->stack_high);
     return cs;
@@ -68,6 +70,16 @@ void callstack_set_called_function(callstack *cs, struct ast_funct_def *f)
 struct ast_funct_def *callstack_get_called_function(const callstack *cs)
 {
     return cs->called_function;
+}
+
+void callstack_set_locals(callstack *cs, struct av_strmap *locals)
+{
+    cs->locals = locals;
+}
+
+struct av_strmap *callstack_get_locals(const callstack *cs)
+{
+    return cs->locals;
 }
 
 static void write_trace(const callstack *cs, FILE *out)

@@ -16,25 +16,14 @@
 #include "aussom/ast_class.h"
 #include "aussom/ast_node.h"
 #include "aussom/console.h"
+#include "aussom/debugger.h"
 #include "aussom/extern_registry.h"
 
 struct av_type;     /* for static-class instance lookups */
 struct av_strmap;   /* per-engine static-class instance registry */
+struct av_list;     /* main's argument list */
 struct security_manager; /* the engine's policy, security_manager.h */
 
-/* Minimal Engine: just enough to back the parser's semantic
- * actions. Mirrors the small subset of com.aussom.Engine that the
- * CUP grammar reaches into:
- *
- *   - addClass(astClass)
- *   - addInclude(String)
- *   - setParseError()
- *
- * Everything else from the Java Engine (debugger plumbing, static
- * class registry, security manager, extern class loader, threads)
- * is deferred until later phases of the port.
- *
- * Allocated via the project GC; do not free. */
 /* What a running Aussom program should do when it reaches its next
  * checkpoint. The engine holds one of these in a volatile field, so
  * the common case costs a single read and a compare.
@@ -154,6 +143,12 @@ typedef struct engine_module {
     const char *src;
 } engine_module;
 
+/* The interpreter engine. Ports com.aussom.Engine: the parsed classes
+ * and includes, the security manager, the logger, the standard library
+ * modules and extern packages, the control state, the thread registry
+ * and the debugger.
+ *
+ * Allocated via the project GC; do not free. */
 typedef struct engine {
     /* Top-level classes parsed from input. Stored as ast_node *
      * holding ast_class * via the embedded base struct. */
@@ -264,12 +259,25 @@ typedef struct engine {
     size_t diags_count;
     size_t diags_capacity;
 
-    /* The environment script-mode statements are evaluated against.
-     * Set by eval_run_statements; NULL until then. Its locals hold
-     * every top-level binding the session has made, which is the
-     * bridge for tooling that needs to read or manage session scope
-     * (a REPL inspector listing what is currently defined). */
+    /* Script-mode state. Ports the fields of the same names on the
+     * Java Engine; see the Script mode section below. The script class
+     * is deliberately not in the classes table, so the classic run
+     * path never sees it. */
+    bool script_mode;
+    struct ast_class *script_class;
+    /* The script class's main(args), held directly: its one untyped
+     * argument files it among the wildcard overloads, where a lookup
+     * by exact signature would not find it. */
+    struct ast_funct_def *script_main_fn;
+    struct av_object *script_instance;
     struct environment *script_env;
+    /* The file name script-mode parses give their nodes; "<script>"
+     * by default. */
+    char *script_file_name;
+    /* Index of the first statement in the script main's body not yet
+     * evaluated. engine_eval_parsed_script advances it to the end of
+     * the body, so a statement from an earlier call never runs again. */
+    size_t script_cursor;
 
     /* What a running program should do at its next checkpoint. Written
      * by engine_cancel / engine_pause / engine_resume from any thread
@@ -299,6 +307,21 @@ typedef struct engine {
 
     /* Numeric limits snapshot, rebuilt by engine_refresh_limits. */
     engine_limits limits;
+
+    /* The strings handed to main(args). Ports Engine.mainFunctArgs;
+     * filled by engine_add_main_arg and engine_add_main_args. */
+    struct av_list *main_funct_args;
+
+    /* Debugging state. Ports Engine.debugMode and Engine.debugger; see
+     * the Debugging section below.
+     *
+     * debug_mode is a plain bool because it is set before any
+     * interpreter thread starts and is read before every node, so it
+     * has to be cheap. debugger is volatile because a debug session may
+     * swap or clear it while interpreter threads run. The pointer is
+     * borrowed: the host keeps the table alive while it is installed. */
+    bool debug_mode;
+    const aussom_debugger *volatile debugger;
 } engine;
 
 /* One parse-time diagnostic with its position kept as data. Line and
@@ -555,26 +578,123 @@ bool engine_is_path_exclude_path(const engine *e, const char *test_path);
  * otherwise, and non-zero on failure. Where Java throws
  * aussomException (parse errors present, or no main class found) this
  * logs through the engine logger and returns 1, since C has no
- * exceptions to propagate. */
+ * exceptions to propagate.
+ *
+ * main is passed the strings added with engine_add_main_arg and
+ * engine_add_main_args, as one list. */
 int engine_run(engine *e, const char *program_name);
 
-/* Runs a parsed statement list (e.g. from script-mode parsing) over a
- * fresh environment whose locals are `locals` (caller-supplied so the
- * results can be inspected) and a root call frame. Returns the final
- * value or an exception. Mirrors the Java Engine run entry. Gated by
- * aussom.script.mode.enable, as Java's evalParsedScript is: when it is
- * off the result is a security exception. */
-struct av_type;
-struct ast_statement_list;
-struct av_strmap;
-struct av_type *eval_run_statements(engine *e, struct ast_statement_list *script,
-                                    struct av_strmap *locals);
+/* Adds a string to the list passed to main(args). Ports
+ * Engine.addMainArg. The string is copied. */
+void engine_add_main_arg(engine *e, const char *arg);
+
+/* Adds `count` strings to the list passed to main(args), in order.
+ * Ports Engine.addMainArgs. The strings are copied. */
+void engine_add_main_args(engine *e, const char *const *args, size_t count);
+
+/* ============================================================
+ * Script mode
+ *
+ * Script mode runs bare top-level statements, the way a REPL, a
+ * notebook or a script file without a main class needs. Ports the
+ * script-mode API on com.aussom.Engine.
+ *
+ * Turning it on builds a synthetic class named
+ * ENGINE_SCRIPT_CLASS_NAME with an empty main(args), and an instance of
+ * it bound to a long-lived environment. Each submission's top-level
+ * statements are appended to that main's body and run against that
+ * environment, so variables, classes and closures from earlier
+ * submissions stay visible to later ones.
+ *
+ * The synthetic class is never added to the engine's class table, so
+ * engine_run and the classic parse path behave the same whether or not
+ * script mode is on.
+ *
+ * Everything here is gated by aussom.script.mode.enable, checked on
+ * every entry so revoking the property takes effect at once.
+ *
+ * Java throws aussomException for a denial, for script mode being off
+ * and for a parse error. Here the calls that return a value return an
+ * exception value with the same text instead; the others return the
+ * text, or NULL on success.
+ * ============================================================ */
+
+/* The synthetic script class's name. Ports Engine.SCRIPT_CLASS_NAME. */
+#define ENGINE_SCRIPT_CLASS_NAME "__script_main"
+
+/* True while script mode is on. */
+bool engine_is_script_mode(const engine *e);
+
+/* Turns script mode on or off. Turning it on builds a fresh synthetic
+ * class, instance and environment, so a session that was turned off
+ * and on again starts empty. Turning it off keeps them; it only stops
+ * further submissions. Setting the mode it already has does nothing.
+ * Returns NULL, or the error text when aussom.script.mode.enable is
+ * not set or the synthetic class could not be instantiated. */
+const char *engine_set_script_mode(engine *e, bool on);
+
+/* The file name script-mode parses report on their nodes, and so in
+ * errors and stack traces. Defaults to "<script>". A host running a
+ * real file sets it once, after turning script mode on. */
+void engine_set_script_file_name(engine *e, const char *file_name);
+const char *engine_get_script_file_name(const engine *e);
+
+/* The synthetic script class, or NULL if script mode has never been
+ * turned on. Its main's body holds every statement the session has
+ * parsed, which is how tooling (an LSP provider, a debugger) walks
+ * them. Read-only; triggers no parsing or evaluation. */
+struct ast_class *engine_get_script_class(const engine *e);
 
 /* The live environment script mode evaluates top-level statements
- * against, or NULL if no script has been run. Not a copy: its locals
- * are the live map, so a caller that mutates it changes the running
- * session's scope. Read-only; triggers no parsing or evaluation. */
+ * against, or NULL if script mode has never been turned on. Its locals
+ * hold every top-level binding the session has made. Not a copy: a
+ * caller that changes it changes the running session's scope.
+ * Read-only; triggers no parsing or evaluation. */
 struct environment *engine_get_script_environment(const engine *e);
+
+/* Parses `source` and runs only the statements it added. Ports
+ * Engine.evalLine(source, lineNumber), which is
+ * engine_parse_script_line followed by engine_eval_parsed_script; Java's
+ * evalLine(source) is this with line_number 1.
+ *
+ * line_number is the line the first source line reports as, so a
+ * snippet that starts on line 42 of a file keeps its errors on the
+ * right lines.
+ *
+ * Returns the value of the last statement run, or null when there was
+ * none. A runtime error comes back as the exception value. A parse
+ * error comes back as an exception with the text
+ * "Engine.parseScriptLine: parse error."; the parse diagnostics hold
+ * the details. */
+struct av_type *engine_eval_line(engine *e, const char *source, int line_number);
+
+/* The parse half of engine_eval_line. Appends the statements `source`
+ * holds to the script main's body without running them, and sets
+ * *body to that body for engine_eval_parsed_script. Splitting the two
+ * gives a debugger a place to set breakpoints on the new nodes before
+ * they run. Ports Engine.parseScriptLine.
+ *
+ * On a parse error the statements this call appended are removed, the
+ * engine's parse-error flag is cleared (its diagnostics are kept), and
+ * the error text is returned. Returns NULL on success. */
+struct ast_statement_list;
+const char *engine_parse_script_line(engine *e, const char *source, int line_number,
+                                     struct ast_statement_list **body);
+
+/* The run half of engine_eval_line. Runs the statements in `body` that
+ * no earlier call ran, against the script environment, and stops at
+ * the first exception, return or break. Ports
+ * Engine.evalParsedScript. `body` must be the one
+ * engine_parse_script_line gave back.
+ *
+ * The statements are marked as run before the first one starts, so a
+ * failure part way through never leaves some to run on the next call.
+ * Picks up any limit changed in policy since the last call, and
+ * registers this thread with the engine while it runs.
+ *
+ * Returns the last statement's value (the returned value for a
+ * return), null when nothing was left to run, or an exception. */
+struct av_type *engine_eval_parsed_script(engine *e, struct ast_statement_list *body);
 
 /* ============================================================
  * Control: cancel, pause and resume
@@ -695,6 +815,13 @@ void engine_exit_interpreter_thread(thread_scope *sc);
  * "several are". */
 size_t engine_interpreter_thread_count(engine *e);
 
+/* A small positive integer naming the calling thread, the stand-in for
+ * Java's Thread.getId() that a debugger uses to tell its threads apart.
+ * As in Java, it is process-wide rather than per engine, and stays the
+ * same for the life of the thread. Assigned the first time a thread
+ * asks, counting up from 1, and never reused. */
+int64_t engine_thread_id(void);
+
 /* CPU nanoseconds this engine has used: banked totals from finished
  * threads plus what its live threads have used so far. */
 uint64_t engine_get_cpu_nanos(engine *e);
@@ -732,6 +859,81 @@ int64_t engine_get_class_definition_bytes(engine *e);
  * zero. Matches the Java accounting contract, where the counters
  * likewise degrade to -1 rather than lying. */
 #define ENGINE_FOOTPRINT_UNAVAILABLE (-1)
+
+/* ============================================================
+ * Debugging
+ *
+ * Ports com.aussom.AussomDebuggingInt, which Engine implements: install
+ * a debugger (debugger.h), find the nodes on a source line, set and
+ * clear breakpoints, and evaluate source in a paused frame. Step modes,
+ * per-thread state and everything a debug adapter shows live in the
+ * debugger, not here.
+ *
+ * With no debugger installed, ast_node_eval pays one branch per node.
+ * With one installed, before each node it checks the node's breakpoint
+ * flag, then asks should_pause_for_step, and calls on_pause when either
+ * says to stop. After each node it reports a new exception value to
+ * on_exception.
+ * ============================================================ */
+
+/* Installs `d`, or clears it when `d` is NULL. Installing turns debug
+ * mode on; clearing turns it off. Ports Engine.setDebugger.
+ *
+ * Call before any interpreter thread starts. The table may be swapped
+ * during a session, but turning debug mode on under a running program
+ * is not supported, as in Java.
+ *
+ * Gated by the security property aussom.debugger.enable. Returns NULL
+ * on success, or the reason it was refused where Java throws. Clearing
+ * is always allowed. The table is borrowed: the caller keeps it alive
+ * for as long as it is installed. */
+const char *engine_set_debugger(engine *e, const aussom_debugger *d);
+
+/* The installed debugger, or NULL. Ports Engine.getDebugger. */
+const aussom_debugger *engine_get_debugger(const engine *e);
+
+/* True while a debugger is installed. Ports Engine.isDebugMode. */
+bool engine_is_debug_mode(const engine *e);
+
+/* Finds every node, across every class this engine has parsed and the
+ * script class, whose file name equals `file_name` and whose line is
+ * `line`. Ports Engine.findNodesByLine. Nodes are visited in the same
+ * order as Java: each class, then its members, then its functions,
+ * depth first, with the script class last.
+ *
+ * Writes up to `max` matches to `out` and returns how many there are in
+ * all, so a caller can pass 0 to count them first. Costs one walk of
+ * the whole tree: call it per breakpoint request, not on a hot path. */
+size_t engine_find_nodes_by_line(engine *e, const char *file_name, int line,
+                                 ast_node **out, size_t max);
+
+/* Sets the breakpoint flag on the first node engine_find_nodes_by_line
+ * finds, which is usually the outermost statement on the line. Returns
+ * false when the line has no node. Ports Engine.setBreakpoint. */
+bool engine_set_breakpoint(engine *e, const char *file_name, int line);
+
+/* Clears the breakpoint flag on every node on the line. Returns true if
+ * any was set. Ports Engine.clearBreakpoint. */
+bool engine_clear_breakpoint(engine *e, const char *file_name, int line);
+
+/* Clears every breakpoint flag in the engine. Returns true if any was
+ * set. Ports Engine.clearAllBreakpoints. */
+bool engine_clear_all_breakpoints(engine *e);
+
+/* Parses `source` as statements and runs them in `frame`: its `this`,
+ * locals and call stack. Ports Engine.evalInFrame. A debugger calls it
+ * from on_pause with the environment it was handed.
+ *
+ * Returns the value of the last statement, or null when there is none.
+ * A `return` statement's value is unwrapped. A runtime error is
+ * returned as its exception value.
+ *
+ * Gated by aussom.debugger.enable, checked on every call. A security
+ * denial and a parse error are returned as exceptions too, where Java
+ * throws: "Engine.evalInFrame: Security exception, ..." and
+ * "Engine.evalInFrame: parse error." */
+struct av_type *engine_eval_in_frame(engine *e, const char *source,
+                                     struct environment *frame);
 
 /* ============================================================
  * Limits

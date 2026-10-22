@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 
+#include "aussom/av_json.h"
 #include "aussom/av_list.h"
 #include "aussom/av_type.h"
 #include "aussom/environment.h"
@@ -82,11 +83,6 @@ av_type *aussom_regex_matches(environment *env, const char *re, const char *hay)
  * Java's Pattern.split. */
 av_type *aussom_regex_split(environment *env, const char *re, const char *hay,
                             av_list **out_parts);
-
-/* Recursively serializes a value to a JSON string (GC-managed).
- * Returns an av_exception value when a non-serializable type is
- * encountered. Shared by the toJson extern on every type. */
-av_type *av_to_json(av_type *v);
 
 /* Recursively serializes a value to the Aussom "pack" format (mirrors
  * the per-type pack() in the Java runtime: {"type":..,"value"/"members"}).

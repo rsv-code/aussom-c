@@ -25,7 +25,7 @@
 #include "aussom/engine.h"
 #include "aussom/extern_registry.h"
 #include "aussom/stack_guard.h"
-#include "json_simple.h"
+#include "aussom/json_simple.h"
 #include "codec.h"
 #include "stdlib_internal.h"
 
