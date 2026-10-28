@@ -110,6 +110,50 @@ OPT     := -O2 -g
 # Override HOST_OS on a cross build (HOST_OS=darwin, mingw, linux).
 HOST_OS ?= $(shell uname -s | tr 'A-Z' 'a-z')
 
+# --- the glibc a Linux x86-64 build links against ------------------
+#
+# A Linux binary records, for each glibc function it calls, the newest
+# version of that function in the glibc it was linked against, and will
+# not start on a system with an older one. Built against this machine's
+# glibc, it runs only on systems as new as this one.
+#
+# ../aussom-glibc holds the glibc, kernel headers and C++ runtime of
+# Ubuntu 16.04, unpacked as a sysroot. When it is there, every compile
+# and link of a host build goes through it, so the binary starts on
+# anything from glibc 2.23 on. When it is not, the build uses this
+# machine's, as before. A cross build (TARGET set) never uses it.
+#
+# --sysroot alone is not enough. GCC also searches a library directory
+# relative to its own install, which is this machine's, and finds the
+# start files and libc there first; -B and -L put the sysroot's ahead of
+# it.
+#
+# The headers matter as much as the libraries. glibc 2.38's turn strtol
+# into __isoc23_strtol, which 2.23 does not have, so libaussom.a has to
+# be compiled against the sysroot too: aussom-mobile links it into a
+# binary built the same way, and the link fails otherwise.
+#
+# The flags go in CC rather than CFLAGS because the vendored sources are
+# compiled with their own flag sets, and every rule uses $(CC). A CC
+# given on the command line still wins, as it does for any assignment
+# here.
+#
+# Objects built with and without the sysroot do not mix. Adding or
+# removing ../aussom-glibc needs a `make clean`.
+AUSSOM_GLIBC_DIR ?= ../aussom-glibc
+GLIBC_SYSROOT    := $(abspath $(AUSSOM_GLIBC_DIR))/linux-x86_64
+ifndef TARGET
+ifeq ($(HOST_OS)-$(shell uname -m),linux-x86_64)
+ifneq (,$(wildcard $(GLIBC_SYSROOT)/usr/include/stdio.h))
+  GLIBC_FLAGS := --sysroot=$(GLIBC_SYSROOT) \
+                 -B$(GLIBC_SYSROOT)/usr/lib/x86_64-linux-gnu \
+                 -L$(GLIBC_SYSROOT)/usr/lib/x86_64-linux-gnu \
+                 -L$(GLIBC_SYSROOT)/lib/x86_64-linux-gnu
+  CC := gcc $(GLIBC_FLAGS)
+endif
+endif
+endif
+
 # GC_THREADS makes <gc.h> declare the thread API and redirect
 # pthread_create to the GC's auto-registering wrapper. -pthread is
 # both a compile flag (sets _REENTRANT) and a link flag (pulls in
@@ -314,6 +358,16 @@ BDWGC_DEFS := -DALL_INTERIOR_POINTERS -DENABLE_DISCLAIM \
               -DGC_ATOMIC_UNCOLLECTABLE -DGC_GCJ_SUPPORT \
               -DJAVA_FINALIZATION -DNO_EXECUTE_PERMISSION \
               -DUSE_MMAP -DUSE_MUNMAP -DGC_THREADS -DGC_BUILTIN_ATOMIC
+# Against ../aussom-glibc only. The collector uses sigjmp_buf, which
+# -std=c11 hides unless POSIX is asked for. This machine's glibc (2.39)
+# asks for it on its own, at this level, when -pthread defines
+# _REENTRANT; glibc 2.23 does not. Naming it there keeps the collector
+# compiled the same way on both. It stays off everywhere else because
+# the collector reads _POSIX_C_SOURCE on Darwin (gcconfig.h), and those
+# builds should not change.
+ifdef GLIBC_FLAGS
+BDWGC_DEFS += -D_POSIX_C_SOURCE=199506L
+endif
 # On Windows the project builds against MinGW's winpthreads, so the
 # collector has to be told to use the pthreads API rather than the Win32
 # native one, and that it is being linked statically rather than as a

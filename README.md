@@ -17,7 +17,7 @@ Three things define the project:
   add its own classes and functions written in C. The interpreter itself
   never loads code at run time.
 
-This is version 0.3.0-alpha, which matches aussom-base 1.4.10.
+This is version 0.3.1-alpha, which matches aussom-base 1.4.10.
 
 ## What Aussom is
 

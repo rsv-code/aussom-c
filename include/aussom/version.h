@@ -39,7 +39,7 @@
 /* Changes when something is added and nothing existing moves. */
 #define AUSSOM_VERSION_MINOR 3
 /* Changes when only the implementation did. */
-#define AUSSOM_VERSION_PATCH 0
+#define AUSSOM_VERSION_PATCH 1
 
 /* What follows the numbers, such as "-alpha". Empty for a release. */
 #define AUSSOM_VERSION_LABEL "-alpha"
